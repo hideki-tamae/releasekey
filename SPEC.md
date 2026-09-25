@@ -166,7 +166,20 @@ Docs: https://docs.ens.domains/ensv2/overview
 
 Deadline: **Sun Sep 27, 09:00 JST.** Internal target: draft submitted **Sat 22:00 JST**.
 
-## 10. Priority order (if time runs short, cut from the bottom)
+## 10. Judging & rules (ETHGlobal Tokyo 2026 kickoff slides + official rules)
+
+- **Finalist requirements:** auditable repo; open source, **deployed and live**; demo video in the submission; team attends **live finalist judging**.
+- **Finalist judging:** separate judges from partner judging; **4 min demo + 3 min Q&A**. Do not prepare last minute.
+- **Partner judging:** select partner logos on the dashboard; can present before or after the finalist slot.
+- **Good submission:** record a video; **fewer slides, more demo**; many small commits / small diffs; detailed project page with screenshots.
+- **AI use:** all AI tools allowed; we will be **asked to explain how AI was used**; plan files (this SPEC) belong in the repo.
+- **Video:** 2–4 min, 720p+, a human voice (no AI voiceover).
+- **Pre-existing work:** must be disclosed; undisclosed prior work can lead to disqualification. Single large commits are presumed ineligible.
+- Judges historically favor novel, working experiments over polished reuse.
+
+Implication for every decision: a small flow that **really works live** beats a large feature set that is mocked.
+
+## 11. Priority order (if time runs short, cut from the bottom)
 
 1. Contract + tests + Sepolia deploy
 2. World ID gate with backend validation + failure path
