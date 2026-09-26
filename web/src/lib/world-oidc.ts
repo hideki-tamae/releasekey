@@ -95,21 +95,31 @@ export async function exchangeCodeForIdToken(
   code: string,
   codeVerifier: string
 ): Promise<string> {
+  // The sandbox token endpoint authenticates the client via HTTP Basic
+  // auth (client_secret_basic) — client_id/client_secret in the body
+  // (client_secret_post) is rejected with invalid_client.
+  const basicAuth = Buffer.from(
+    `${requiredEnv("WORLD_CLIENT_ID")}:${requiredEnv("WORLD_CLIENT_SECRET")}`
+  ).toString("base64");
+
   const res = await fetch(TOKEN_ENDPOINT, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Authorization: `Basic ${basicAuth}`,
+    },
     body: new URLSearchParams({
       grant_type: "authorization_code",
       code,
       redirect_uri: requiredEnv("WORLD_REDIRECT_URI"),
-      client_id: requiredEnv("WORLD_CLIENT_ID"),
-      client_secret: requiredEnv("WORLD_CLIENT_SECRET"),
       code_verifier: codeVerifier,
     }),
   });
 
   if (!res.ok) {
-    throw new WorldVerificationError(`Token exchange failed (${res.status})`);
+    const body = await res.text().catch(() => "<unreadable body>");
+    console.error("World ID token exchange failed:", res.status, body);
+    throw new WorldVerificationError(`Token exchange failed (${res.status}): ${body}`);
   }
 
   const body = (await res.json()) as { id_token?: string };
