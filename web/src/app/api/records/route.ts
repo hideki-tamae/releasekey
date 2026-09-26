@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
-import { encodeAbiParameters, keccak256, type Hex } from "viem";
+import { encodeAbiParameters, keccak256, toBytes, type Hex } from "viem";
 import { createCommitment } from "@/lib/chain";
 import { getRecipientPublicKey } from "@/lib/ens-encryption";
 import { encryptForRecipient } from "@/lib/ens-crypto";
@@ -14,7 +14,16 @@ import { storeRecord } from "@/lib/record-store";
 // approve anything — createCommitment leaves the record in `Created`,
 // which only APPROVER_ROLE (via the World ID callback) can move forward.
 //
-// Optional `recipientEns`: if given, the synthetic content is actually
+// Optional `content`: the real record text (e.g. a transcribed voice
+// check-in). `contentHash` is keccak256 of this *actual* content — not a
+// random placeholder — so the on-chain commitment is genuinely verifiable:
+// anyone who is later shown the plaintext can recompute
+// keccak256(content, salt) and check it against the on-chain commitment
+// to prove it hasn't been altered since it was prepared. Falls back to a
+// fixed synthetic string if no content is given (e.g. calls that don't
+// use the voice check-in UI).
+//
+// Optional `recipientEns`: if given, this same content is actually
 // encrypted to that recipient's public key (published as an ENS text
 // record — see lib/ens-encryption.ts). Only the recipient's private key
 // can ever decrypt `encryptedContent`; we never see it in the clear once
@@ -24,13 +33,25 @@ function randomHex32(): Hex {
 }
 
 export async function POST(req: NextRequest) {
-  const { recipientEns } = (await req.json().catch(() => ({}))) as { recipientEns?: string };
+  const { recipientEns, content: providedContent } = (await req.json().catch(() => ({}))) as {
+    recipientEns?: string;
+    content?: string;
+  };
 
   const recordId = randomHex32();
-  const contentHash = randomHex32(); // stand-in for hash of the synthetic record
   const salt = randomHex32();
   const recipientNode = randomHex32(); // stand-in for an ENS-style recipient node
   const recipientSalt = randomHex32();
+
+  const content =
+    providedContent?.trim() ||
+    `Voice check-in received (synthetic demo audio, record ${recordId}). ` +
+      `The agent prepared this record for ${recipientEns ?? "the recipient"} — content stays ` +
+      `encrypted until a fresh human approval releases it.`;
+
+  // Real hash of the real content — verifiable by anyone who later sees
+  // the plaintext, not a decorative placeholder.
+  const contentHash = keccak256(toBytes(content));
 
   const commitment = keccak256(
     encodeAbiParameters([{ type: "bytes32" }, { type: "bytes32" }], [contentHash, salt])
@@ -46,12 +67,7 @@ export async function POST(req: NextRequest) {
   if (recipientEns) {
     try {
       const recipientPublicKey = await getRecipientPublicKey(recipientEns);
-      encryptedContent = encryptForRecipient(
-        `Voice check-in received (synthetic demo audio, record ${recordId}). ` +
-          `The agent prepared this record for ${recipientEns} — content stays encrypted ` +
-          `until a fresh human approval releases it.`,
-        recipientPublicKey
-      );
+      encryptedContent = encryptForRecipient(content, recipientPublicKey);
       storeRecord(recordId, { recipientEns, encryptedContent });
     } catch (err) {
       console.error("encryption for recipient failed:", err);
@@ -65,6 +81,8 @@ export async function POST(req: NextRequest) {
       recordId,
       commitment,
       recipientCommitment,
+      contentHash,
+      salt,
       txHash,
       ...(encryptedContent && { recipientEns, encryptedContent }),
     });
