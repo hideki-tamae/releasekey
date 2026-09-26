@@ -2,3 +2,5 @@ out/
 cache/
 broadcast/
 .env
+.env.local
+web/.env.local
