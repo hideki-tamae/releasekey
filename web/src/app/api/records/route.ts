@@ -4,6 +4,7 @@ import { encodeAbiParameters, keccak256, type Hex } from "viem";
 import { createCommitment } from "@/lib/chain";
 import { getRecipientPublicKey } from "@/lib/ens-encryption";
 import { encryptForRecipient } from "@/lib/ens-crypto";
+import { storeRecord } from "@/lib/record-store";
 
 // POST /api/records
 // Demo-only stand-in for "the agent prepares a release package". Content
@@ -46,9 +47,12 @@ export async function POST(req: NextRequest) {
     try {
       const recipientPublicKey = await getRecipientPublicKey(recipientEns);
       encryptedContent = encryptForRecipient(
-        `Synthetic demo record ${recordId} — content never leaves encrypted form.`,
+        `Voice check-in received (synthetic demo audio, record ${recordId}). ` +
+          `The agent prepared this record for ${recipientEns} — content stays encrypted ` +
+          `until a fresh human approval releases it.`,
         recipientPublicKey
       );
+      storeRecord(recordId, { recipientEns, encryptedContent });
     } catch (err) {
       console.error("encryption for recipient failed:", err);
       return NextResponse.json({ error: "encryption_failed" }, { status: 400 });
