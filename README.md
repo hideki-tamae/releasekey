@@ -30,8 +30,9 @@ Approver (APPROVER_ROLE key) ──▶ approveRelease(recordId, verificationRef,
 The AGENT_ROLE wallet can only create commitments. Only the APPROVER_ROLE
 wallet — acting after the backend validates a fresh World ID verification —
 can approve a release or revoke it. **The agent can never approve its own
-release.** This is verified both by 16 passing Foundry tests and live on
-Sepolia (see Deployment below).
+release.** This is verified by 16 passing Foundry tests, 13 passing backend
+tests for the World ID gate (`web/src/lib/*.test.ts`), and live on Sepolia
+(see Deployment and World ID sections below).
 
 ## Data boundary
 
@@ -68,6 +69,29 @@ On-chain proof of the core invariant (checked live via `cast call` after deploym
 | Approver wallet has `APPROVER_ROLE` | `true` |
 | **Agent wallet has `APPROVER_ROLE`** | **`false`** — the agent cannot approve its own release, proven on Sepolia, not just in tests |
 
+## World ID for Agents — release gate
+
+Standard OpenID Connect Core 1.0 authorization-code flow + PKCE (RFC 7636)
+against World's sandbox (`sandbox.auth.world.org`), forcing a fresh,
+never-cached human check on every release (`prompt=login`, `max_age=0`,
+`acr_values=…/orb-v3`). Implementation: `web/src/lib/world-oidc.ts` (OIDC
+client), `web/src/app/api/world/{authorize,callback}/route.ts` (routes),
+`web/src/lib/release-flow.ts` (binds a verification to one `recordId`,
+rejects replay/tampering/mismatch).
+
+Verified live end-to-end on Sepolia — not just unit-tested:
+
+| Step | Result |
+|---|---|
+| `POST /api/records` → `createCommitment` mined | e.g. [`0x5586b5ac…`](https://sepolia.etherscan.io/tx/0x5586b5ac31b03baa2264262f52d103c50b2a1f7acc279272d8bffbf01e64a242) |
+| World ID sandbox authorization + token exchange | succeeds (client authenticates via HTTP Basic per the sandbox's requirement — see `WORLD-FEEDBACK.md`) |
+| `approveRelease` called on-chain, only after a verified id_token | e.g. record [`0xe77db848…`](https://sepolia.etherscan.io/address/0x56ede4fbded72b0e05f3cc92bd41f98a74549686) → `status: Approved` |
+| Failure paths never touch the chain | verified: World ID denial (`error=…`), tampered/unknown `state`, missing `code` — each redirects to `/release/result?status=denied&reason=…` with zero contract calls |
+
+13 passing tests (`cd web && npm test`) cover replay prevention
+(`VerificationAlreadyUsed`), token-verification failure, non-orb `acr`,
+stale `auth_time`, and TTL bounds at the function level.
+
 ## Setup
 
 ```bash
@@ -77,23 +101,26 @@ cp .env.example .env   # fill in DEPLOYER_PRIVATE_KEY, AGENT_WALLET_ADDRESS, APP
 forge test -vv
 forge script script/DeployReleaseKey.s.sol:DeployReleaseKey --rpc-url sepolia --broadcast
 
-# Frontend (passkey onboarding via JAW.id)
+# Frontend
 cd web
-npm install
-cp .env.local.example .env.local   # fill in NEXT_PUBLIC_JAW_API_KEY
-npm run dev
+npm install --legacy-peer-deps
+cp .env.example .env.local   # fill in AGENT/APPROVER_PRIVATE_KEY, RELEASEKEY_CONTRACT_ADDRESS,
+                              # SEPOLIA_RPC_URL, WORLD_CLIENT_ID/SECRET, NEXT_PUBLIC_JAW_API_KEY
+npm test                     # 13 backend tests for the World ID gate
+npm run dev                  # HTTPS on :3010 (self-signed cert — browser will warn, accept it);
+                              # World's redirect_uri requires https, hence --experimental-https
 ```
 
 ## Live demo
 
-TBD — frontend currently covers passkey onboarding only; the release flow
-(World ID for Agents gate + on-chain approval) is being wired to the deployed
-contract above.
+Deployed on Vercel: TBD (deploying now — see commit history for the update).
+Verified working locally end-to-end on Sepolia as of 2026-09-26 (see table above).
 
 ## Known limitations
 
-- World ID for Agents integration is not yet wired to the deployed contract (see `SPEC.md` §6 for the planned sequence).
-- ENSv2 subname/text-record integration (SPEC §7) is a stretch goal and may be dropped if not genuinely working by the submission cutoff.
+- World ID for Agents runs against the **sandbox** environment (`sandbox.auth.world.org`), which uses fake identities by design — this is the intended integration point for a hackathon demo, not a claim of production Orb verification.
+- Local dev HTTPS uses a self-signed certificate; browsers show a one-time warning.
+- ENSv2 subname/text-record integration (SPEC §7) was dropped — not genuinely working by the submission cutoff, so it is not claimed as live.
 - Security is demo-grade throughout; no production key-management claims are made.
 
 ## Sponsor integrations — actually live vs. planned
@@ -101,9 +128,9 @@ contract above.
 | Integration | Status |
 |---|---|
 | JAW.id (passkey smart accounts, Sepolia) | **Live** — onboarding works end-to-end |
-| World ID for Agents | Planned, not yet integrated |
-| ENSv2 | Planned (stretch), not yet integrated |
+| World ID for Agents | **Live** — full OIDC+PKCE flow verified end-to-end against the sandbox, gating a real `approveRelease` call on Sepolia (see above) |
+| ENSv2 | Not integrated (dropped, see Known limitations) |
 
 ## AI use
 
-See [`AI-USE.md`](./AI-USE.md) (to be added) for which tools were used, for which files, and which decisions were human-reviewed. [`SPEC.md`](./SPEC.md) is the plan file this implementation follows.
+See [`AI-USE.md`](./AI-USE.md) for which tools were used, for which files, and which decisions were human-reviewed. [`SPEC.md`](./SPEC.md) is the plan file this implementation follows. [`WORLD-FEEDBACK.md`](./WORLD-FEEDBACK.md) has feedback for the World team based on integrating World ID for Agents during this event.
