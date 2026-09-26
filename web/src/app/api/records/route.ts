@@ -1,7 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { encodeAbiParameters, keccak256, type Hex } from "viem";
 import { createCommitment } from "@/lib/chain";
+import { getRecipientPublicKey } from "@/lib/ens-encryption";
+import { encryptForRecipient } from "@/lib/ens-crypto";
 
 // POST /api/records
 // Demo-only stand-in for "the agent prepares a release package". Content
@@ -10,11 +12,19 @@ import { createCommitment } from "@/lib/chain";
 // them on-chain with the AGENT_ROLE wallet. This endpoint can never
 // approve anything — createCommitment leaves the record in `Created`,
 // which only APPROVER_ROLE (via the World ID callback) can move forward.
+//
+// Optional `recipientEns`: if given, the synthetic content is actually
+// encrypted to that recipient's public key (published as an ENS text
+// record — see lib/ens-encryption.ts). Only the recipient's private key
+// can ever decrypt `encryptedContent`; we never see it in the clear once
+// this returns, and neither does anyone reading the chain or ENS.
 function randomHex32(): Hex {
   return `0x${randomBytes(32).toString("hex")}`;
 }
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  const { recipientEns } = (await req.json().catch(() => ({}))) as { recipientEns?: string };
+
   const recordId = randomHex32();
   const contentHash = randomHex32(); // stand-in for hash of the synthetic record
   const salt = randomHex32();
@@ -31,9 +41,29 @@ export async function POST() {
     )
   );
 
+  let encryptedContent;
+  if (recipientEns) {
+    try {
+      const recipientPublicKey = await getRecipientPublicKey(recipientEns);
+      encryptedContent = encryptForRecipient(
+        `Synthetic demo record ${recordId} — content never leaves encrypted form.`,
+        recipientPublicKey
+      );
+    } catch (err) {
+      console.error("encryption for recipient failed:", err);
+      return NextResponse.json({ error: "encryption_failed" }, { status: 400 });
+    }
+  }
+
   try {
     const txHash = await createCommitment({ recordId, commitment, recipientCommitment });
-    return NextResponse.json({ recordId, commitment, recipientCommitment, txHash });
+    return NextResponse.json({
+      recordId,
+      commitment,
+      recipientCommitment,
+      txHash,
+      ...(encryptedContent && { recipientEns, encryptedContent }),
+    });
   } catch (err) {
     console.error("createCommitment failed:", err);
     return NextResponse.json({ error: "create_commitment_failed" }, { status: 500 });
