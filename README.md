@@ -1,66 +1,109 @@
-## Foundry
+# ReleaseKey
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+An AI agent can **prepare** a sensitive record for sharing, but can **never release it alone** — every release requires a fresh, backend-validated human verification at the moment of release, and the chain stores only a minimal commitment, never content or personal data.
 
-Foundry consists of:
+Full design rationale, scope, and requirements: see [`SPEC.md`](./SPEC.md).
 
-- **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
-- **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
-- **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
-- **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+## Architecture
 
-## Documentation
-
-https://book.getfoundry.sh/
-
-## Usage
-
-### Build
-
-```shell
-$ forge build
+```
+User (passkey, JAW.id)                Agent (AGENT_ROLE key)
+        │                                      │
+        │  1. creates a record                 │
+        │                                       ▼
+        │                          createCommitment(recordId, commitment, recipientCommitment)
+        │                                       │
+        │  2. clicks "Release"                  ▼
+        ▼                              ReleaseKey.sol on Sepolia
+World ID for Agents verification              (status: Created)
+        │
+        ▼
+Backend validates server-side
+        │
+        ▼
+Approver (APPROVER_ROLE key) ──▶ approveRelease(recordId, verificationRef, ttl)
+        │
+        ▼
+   status: Approved → short-lived release envelope issued
 ```
 
-### Test
+The AGENT_ROLE wallet can only create commitments. Only the APPROVER_ROLE
+wallet — acting after the backend validates a fresh World ID verification —
+can approve a release or revoke it. **The agent can never approve its own
+release.** This is verified both by 16 passing Foundry tests and live on
+Sepolia (see Deployment below).
 
-```shell
-$ forge test
+## Data boundary
+
+| Data | Where | On-chain? |
+|---|---|---|
+| Record content, files, names, recipient details, exact timestamps, consent text | Client / encrypted off-chain storage | **Never** |
+| Salt, keys, plaintext hashes | Client / server secret storage | **Never** |
+| Random record ID (`bytes32`) | Contract | Yes |
+| Salted commitment `keccak256(abi.encode(contentHash, salt))` | Contract | Yes |
+| Recipient commitment `keccak256(abi.encode(recipientNode, recipientSalt))` | Contract | Yes (hides who the recipient is) |
+| Coarse events: Created / Approved / Revoked | Contract events | Yes |
+
+A salted hash is **publicly visible but only verifiable by someone holding
+the salt** — never "only revealable to the key holder."
+
+Known trade-offs, stated honestly:
+- On-chain events cannot be deleted or corrected. Off-chain deletion does not erase them.
+- Wallet addresses and event timing are metadata and can be linkable.
+- Losing keys/salts means the owner cannot prove what a commitment refers to.
+
+## Deployment (Sepolia)
+
+| Item | Value |
+|---|---|
+| `ReleaseKey.sol` contract | [`0x56EdE4FbDED72B0e05F3Cc92bD41F98a74549686`](https://sepolia.etherscan.io/address/0x56EdE4FbDED72B0e05F3Cc92bD41F98a74549686) |
+| Deployment transaction | [View on Etherscan](https://sepolia.etherscan.io/tx/0x0fce010c7b0955ec1bcf8d2dbc1b3b9acb67f1dced8ea2f20ec940f7b3818310) |
+| Etherscan verification | Pending (requires `ETHERSCAN_API_KEY`) |
+
+On-chain proof of the core invariant (checked live via `cast call` after deployment):
+
+| Check | Result |
+|---|---|
+| Agent wallet has `AGENT_ROLE` | `true` |
+| Approver wallet has `APPROVER_ROLE` | `true` |
+| **Agent wallet has `APPROVER_ROLE`** | **`false`** — the agent cannot approve its own release, proven on Sepolia, not just in tests |
+
+## Setup
+
+```bash
+# Contracts
+forge install
+cp .env.example .env   # fill in DEPLOYER_PRIVATE_KEY, AGENT_WALLET_ADDRESS, APPROVER_WALLET_ADDRESS
+forge test -vv
+forge script script/DeployReleaseKey.s.sol:DeployReleaseKey --rpc-url sepolia --broadcast
+
+# Frontend (passkey onboarding via JAW.id)
+cd web
+npm install
+cp .env.local.example .env.local   # fill in NEXT_PUBLIC_JAW_API_KEY
+npm run dev
 ```
 
-### Format
+## Live demo
 
-```shell
-$ forge fmt
-```
+TBD — frontend currently covers passkey onboarding only; the release flow
+(World ID for Agents gate + on-chain approval) is being wired to the deployed
+contract above.
 
-### Gas Snapshots
+## Known limitations
 
-```shell
-$ forge snapshot
-```
+- World ID for Agents integration is not yet wired to the deployed contract (see `SPEC.md` §6 for the planned sequence).
+- ENSv2 subname/text-record integration (SPEC §7) is a stretch goal and may be dropped if not genuinely working by the submission cutoff.
+- Security is demo-grade throughout; no production key-management claims are made.
 
-### Anvil
+## Sponsor integrations — actually live vs. planned
 
-```shell
-$ anvil
-```
+| Integration | Status |
+|---|---|
+| JAW.id (passkey smart accounts, Sepolia) | **Live** — onboarding works end-to-end |
+| World ID for Agents | Planned, not yet integrated |
+| ENSv2 | Planned (stretch), not yet integrated |
 
-### Deploy
+## AI use
 
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+See [`AI-USE.md`](./AI-USE.md) (to be added) for which tools were used, for which files, and which decisions were human-reviewed. [`SPEC.md`](./SPEC.md) is the plan file this implementation follows.
