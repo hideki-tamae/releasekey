@@ -7,20 +7,35 @@ import { useState } from "react";
 // 2. "Release" → full-page navigation to /api/world/authorize?recordId=...
 //    (a real browser redirect — this is the "fresh human verification at
 //    the moment of release" step, so it must never be an XHR/fetch call).
+const RECIPIENT_ENS = "releasekey.eth";
+
 export function ReleaseFlowClient() {
   const [recordId, setRecordId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [ciphertextPreview, setCiphertextPreview] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
   const prepareRecord = async () => {
     setPending(true);
     setStatus(null);
+    setCiphertextPreview(null);
     try {
-      const res = await fetch("/api/records", { method: "POST" });
+      const res = await fetch("/api/records", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipientEns: RECIPIENT_ENS }),
+      });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? "failed");
       setRecordId(body.recordId);
-      setStatus("Prepared. Nothing is shared yet — this only registered a commitment.");
+      if (body.encryptedContent) {
+        setCiphertextPreview(body.encryptedContent.ciphertext);
+        setStatus(
+          `Prepared. Content encrypted to ${RECIPIENT_ENS}'s public key (looked up from its ENS text record) — nothing is shared yet, and only that key's owner can ever decrypt it.`
+        );
+      } else {
+        setStatus("Prepared. Nothing is shared yet — this only registered a commitment.");
+      }
     } catch {
       setStatus("Could not prepare a record. Check the server logs.");
     } finally {
@@ -50,6 +65,11 @@ export function ReleaseFlowClient() {
         </>
       )}
       {status && <p className="max-w-xs text-xs text-neutral-500">{status}</p>}
+      {ciphertextPreview && (
+        <p className="max-w-xs break-all font-mono text-[10px] text-neutral-600">
+          ciphertext: {ciphertextPreview.slice(0, 40)}…
+        </p>
+      )}
     </div>
   );
 }
