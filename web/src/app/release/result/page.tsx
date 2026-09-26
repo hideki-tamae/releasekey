@@ -1,5 +1,9 @@
 import { RevokeButton } from "./revoke-button";
 
+// Fixed for this demo — see release-flow-client.tsx. The recipient's
+// encryption key came from this same ENS name (com.releasekey.encryptionPubKey).
+const RECIPIENT_ENS = "releasekey.eth";
+
 type SearchParams = Promise<{ status?: string; reason?: string; recordId?: string }>;
 
 // Renders both the success path and every failure path (denied, cancelled,
@@ -28,11 +32,19 @@ export default async function ReleaseResultPage({
         </div>
 
         {approved ? (
-          <p className="text-sm text-neutral-400">
-            A fresh World ID verification was validated and{" "}
-            <span className="text-neutral-200">approveRelease</span> was called on-chain.
-            The release envelope expires shortly, by design.
-          </p>
+          <>
+            <p className="text-sm text-neutral-400">
+              A fresh World ID verification was validated and{" "}
+              <span className="text-neutral-200">approveRelease</span> was called on-chain.
+              The release envelope expires shortly, by design.
+            </p>
+            <p className="mt-3 text-xs text-neutral-500">
+              Released to:{" "}
+              <span className="font-mono text-neutral-300">{RECIPIENT_ENS}</span> — the
+              content was encrypted to this recipient&apos;s ENS-published public key when
+              it was prepared; only they can decrypt it.
+            </p>
+          </>
         ) : (
           <p className="text-sm text-neutral-400">
             No approval was ever attempted on-chain.{" "}

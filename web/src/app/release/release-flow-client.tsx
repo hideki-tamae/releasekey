@@ -45,6 +45,9 @@ export function ReleaseFlowClient() {
 
   return (
     <div className="flex flex-col items-center gap-4 text-center">
+      <p className="text-xs text-neutral-500">
+        Recipient: <span className="font-mono text-neutral-300">{RECIPIENT_ENS}</span>
+      </p>
       {!recordId ? (
         <button
           onClick={prepareRecord}
