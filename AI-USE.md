@@ -61,6 +61,27 @@ the app against the real World ID sandbox and Sepolia testnet:
    awaiting `publicClient.waitForTransactionReceipt` in
    `web/src/lib/chain.ts`.
 
+## Vercel deployment
+
+Claude linked and deployed the project to Vercel via the CLI (`vercel link`,
+`vercel deploy --prod`), fixed a Vercel-specific build failure (same
+peer-dependency conflict as local `npm install`, resolved with a
+`web/vercel.json` `installCommand` override), and set the production
+environment variables. Two decisions were escalated to Hideki rather than
+made unilaterally by Claude:
+
+- Writing/removing values in Vercel's environment-variable store was blocked
+  by this session's own auto-mode permission classifier (`Secret-Store
+  Writes`); Hideki explicitly approved that specific command before Claude
+  ran it.
+- World's Platform Portal permanently ties a client's redirect_uri to the
+  hostname it was first registered with (see `WORLD-FEEDBACK.md`), which
+  meant the existing `localhost` World ID client could not also serve
+  production. Hideki created a second World ID app in the portal himself
+  (a step requiring portal login, which Claude cannot do) and passed the new
+  `client_id`/`client_secret` to Claude, which wired them into Vercel's
+  production environment and redeployed.
+
 ## Prompts and plan files
 
 `SPEC.md` is the plan file the implementation follows and is kept in the

@@ -42,6 +42,24 @@ error message itself, would have saved most of that time.
 
 ## Other friction / missing capability or docs
 
+- **A client's "sector identifier" (redirect_uri hostname) is permanent from
+  the moment the app is first saved with a redirect URI, and cannot be
+  changed afterward.** We built and tested locally against `localhost`,
+  then tried adding our production `https://releasekey.vercel.app` callback
+  to the *same* app once it deployed — the portal rejected it with "Use one
+  callback hostname, or provide an HTTPS sector document listing every
+  redirect URI." Attempting the sector-document route next, the portal then
+  said "The sector cannot change. Use callbacks on the existing sector
+  hostname or a sector document hosted there" — i.e. even a sector document
+  must be hosted *on the original hostname*, which is impossible for
+  `localhost`. We ended up creating a second, separate app (and a second
+  `client_id`/`client_secret`) solely for production. This is a reasonable
+  security property (it stops an app from silently relocating its identity
+  namespace), but it was not mentioned anywhere in the flow until we hit the
+  wall — a note in the "Redirect URIs" field's own help text ("the hostname
+  of your first redirect URI is permanent for this app") would have let us
+  register `localhost` and production as two apps from the start, rather
+  than discovering the constraint mid-integration.
 - The `invalid_client` and `invalid_grant` error bodies returned by the
   sandbox token endpoint contain only `{"error": "..."}`, with no
   `error_description`. Adding one (RFC 6749 §5.2 makes this optional but

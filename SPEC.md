@@ -155,14 +155,15 @@ Docs: https://docs.ens.domains/ensv2/overview
 
 ## 9. Submission checklist
 
-- [ ] Public repo with commit history
-- [ ] Contract deployed + verified on Sepolia
-- [ ] Live demo URL (deployed, working end to end)
+- [x] Public repo with commit history — `github.com/hideki-tamae/releasekey`
+- [x] Contract deployed + verified on Sepolia — `0x56eDe4FbDED72B0e05F3Cc92bD41F98a74549686`
+- [x] Live demo URL (deployed, working end to end) — https://releasekey.vercel.app, confirmed working live on 2026-09-26
 - [ ] Demo video, 2–4 min, own voice, showing success path **and** failure path
 - [ ] Project page: detailed description + screenshots
 - [ ] Partner logos selected on dashboard (World; ENS only if live)
-- [ ] README / AI-USE.md / WORLD-FEEDBACK.md present
-- [ ] Final scan: no secrets or real data in repo
+- [x] README / AI-USE.md / WORLD-FEEDBACK.md present
+- [ ] Final scan: no secrets or real data in repo (re-check after ENS merge)
+- [ ] Merge Thomas's ENS work
 
 Deadline: **Sun Sep 27, 09:00 JST.** Internal target: draft submitted **Sat 22:00 JST**.
 

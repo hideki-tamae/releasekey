@@ -111,10 +111,23 @@ npm run dev                  # HTTPS on :3010 (self-signed cert — browser will
                               # World's redirect_uri requires https, hence --experimental-https
 ```
 
+World's Platform Portal permanently locks a client's `redirect_uri` to the
+hostname it was first registered with ("sector identifier") — see
+`WORLD-FEEDBACK.md`. Practically, this means a `localhost` client and a
+production client **cannot share one `WORLD_CLIENT_ID`**: each deployment
+target needs its own client registered under a single hostname. This repo
+uses two separate World ID clients — one for local dev, one for production —
+each with its own `WORLD_CLIENT_ID`/`WORLD_CLIENT_SECRET`.
+
 ## Live demo
 
-Deployed on Vercel: TBD (deploying now — see commit history for the update).
-Verified working locally end-to-end on Sepolia as of 2026-09-26 (see table above).
+**https://releasekey.vercel.app** — deployed on Vercel, connected to the same
+Sepolia contract as above. `/release` walks through prepare → World ID
+verify → approve, and was confirmed working live in production (not just
+locally) on 2026-09-26.
+
+Production uses its own World ID for Agents client, separate from the one
+used for local development — see the note in Setup below.
 
 ## Known limitations
 
