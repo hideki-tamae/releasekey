@@ -1,5 +1,6 @@
 import { RevokeButton } from "./revoke-button";
 import { AccessReportButton } from "./access-report-button";
+import { ViewStoredButton } from "./view-stored-button";
 
 // Fixed for this demo — see release-flow-client.tsx. The recipient's
 // encryption key came from this same ENS name (com.releasekey.encryptionPubKey).
@@ -61,6 +62,7 @@ export default async function ReleaseResultPage({
           <p className="mt-4 font-mono text-xs break-all text-neutral-600">{recordId}</p>
         )}
 
+        {recordId && <ViewStoredButton recordId={recordId} />}
         {approved && recordId && <AccessReportButton recordId={recordId} />}
         {approved && recordId && <RevokeButton recordId={recordId} />}
 
