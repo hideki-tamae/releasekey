@@ -82,6 +82,37 @@ made unilaterally by Claude:
   `client_id`/`client_secret` to Claude, which wired them into Vercel's
   production environment and redeployed.
 
+## ENS public-key directory (worked out with Thomas, the ENS-track teammate)
+
+The design (recipient publishes an encryption public key as an ENS text
+record; the agent looks it up and encrypts to it) came out of a live
+back-and-forth with Thomas, our teammate handling the ENS/consent piece —
+Claude relayed his questions and concerns (data privacy for the recipient
+matching/triage step, "do we even need a contract," zero-knowledge
+proofs) between the two humans, translating and clarifying, but every
+design decision was made by Hideki and Thomas, not by Claude alone.
+
+Claude then implemented and verified it end to end: registered
+`releasekey.eth` (Hideki performed the actual registration transaction
+himself through the official ENS app, since Claude cannot hold or approve
+a wallet transaction through a UI), diagnosed why writing a text record
+silently reverted (Sepolia's ENSv2 resolver takes a DNS-encoded name, not
+a `namehash` — see `ENS-FEEDBACK.md`), wrote the actual public key Thomas
+shared for a demo "Bob" keypair, and implemented the hybrid-encryption
+library (`web/src/lib/ens-crypto.ts`) with unit tests. Hideki reviewed and
+approved every on-chain write before it happened, same as throughout this
+project.
+
+One judgment call flagged rather than made unilaterally: when Claude's
+first attempt at diagnosing the ENSv2 write failure hit a dead end
+(sandbox exploration budget nearly spent), Claude recommended cutting the
+ENS integration entirely rather than continuing to guess. Hideki pushed
+back, asked for an honest time estimate instead of a default-to-caution
+answer, and that reset led directly to finding the real fix (reading the
+resolver's verified proxy implementation on Etherscan). Recorded here
+because it's a real instance of a human correcting an AI's risk-aversion,
+not just approving what Claude proposed.
+
 ## Prompts and plan files
 
 `SPEC.md` is the plan file the implementation follows and is kept in the

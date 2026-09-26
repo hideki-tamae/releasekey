@@ -92,6 +92,33 @@ Verified live end-to-end on Sepolia — not just unit-tested:
 (`VerificationAlreadyUsed`), token-verification failure, non-orb `acr`,
 stale `auth_time`, and TTL bounds at the function level.
 
+## ENS — recipient public-key directory
+
+A recipient publishes their content-encryption public key as an ENS text
+record (`com.releasekey.encryptionPubKey`) on their own name. The agent's
+prepare step looks it up and encrypts the record to it — hybrid encryption
+(ephemeral secp256k1 key + ECDH + HKDF + AES-256-GCM). Only the recipient's
+private key can ever decrypt it; not us, not the sender, not anyone reading
+the (public) ENS record or the (public) chain. Implementation:
+`web/src/lib/ens-crypto.ts` (pure crypto, unit-tested), `web/src/lib/ens-encryption.ts`
+(the ENS lookup).
+
+Verified live on Sepolia, not just unit-tested:
+
+| Step | Result |
+|---|---|
+| Registered [`releasekey.eth`](https://sepolia.app.ens.domains/releasekey.eth) via the official ENS app | expires 2026-09-26 (1 year) |
+| Wrote a real public key to its `com.releasekey.encryptionPubKey` text record | [`0xac65d84e…`](https://sepolia.etherscan.io/tx/0xac65d84e46dbeb326e48ea190abf8052c967d5640c7b357b40424215d6128850) |
+| `POST /api/records` with `{"recipientEns": "releasekey.eth"}` | looks the key up from ENS and returns real ciphertext (`encryptedContent`) |
+| Decrypted with the actual recipient's private key | matches the original plaintext |
+| Decryption attempted with a different private key | fails (AES-GCM auth tag rejection) |
+
+ENSv2's resolver on Sepolia (`PermissionedResolver`) takes a DNS-wire-encoded
+name (`bytes`, via viem's `packetToBytes`) rather than the classic `namehash`
+— see `WORLD-FEEDBACK.md` for the debugging story. 3 passing unit tests
+cover the crypto in isolation (recipient decrypts, others can't, ciphertext
+is fresh per call).
+
 ## Setup
 
 ```bash
@@ -133,7 +160,7 @@ used for local development — see the note in Setup below.
 
 - World ID for Agents runs against the **sandbox** environment (`sandbox.auth.world.org`), which uses fake identities by design — this is the intended integration point for a hackathon demo, not a claim of production Orb verification.
 - Local dev HTTPS uses a self-signed certificate; browsers show a one-time warning.
-- ENSv2 subname/text-record integration (SPEC §7) was dropped — not genuinely working by the submission cutoff, so it is not claimed as live.
+- ENS integration is a single name (`releasekey.eth`) holding one recipient's public key, not per-recipient subnames + Enhanced Access Control (the original SPEC §7 stretch scope) — that fuller version is future work, not claimed as live.
 - Security is demo-grade throughout; no production key-management claims are made.
 
 ## Sponsor integrations — actually live vs. planned
@@ -142,7 +169,7 @@ used for local development — see the note in Setup below.
 |---|---|
 | JAW.id (passkey smart accounts, Sepolia) | **Live** — onboarding works end-to-end |
 | World ID for Agents | **Live** — full OIDC+PKCE flow verified end-to-end against the sandbox, gating a real `approveRelease` call on Sepolia (see above) |
-| ENSv2 | Not integrated (dropped, see Known limitations) |
+| ENS | **Live** — a registered Sepolia name (`releasekey.eth`) serves as a real public-key directory; content is genuinely encrypted to the key it holds (see above). Not the fuller per-recipient-subname design from SPEC §7. |
 
 ## AI use
 
