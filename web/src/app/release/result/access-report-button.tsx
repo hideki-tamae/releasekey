@@ -11,6 +11,8 @@ export function AccessReportButton({ recordId }: { recordId: string }) {
   const [state, setState] = useState<"idle" | "pending" | "granted" | "denied">("idle");
   const [content, setContent] = useState<string | null>(null);
   const [denyReason, setDenyReason] = useState<string | null>(null);
+  const [viewedAt, setViewedAt] = useState<string | null>(null);
+  const [followUp, setFollowUp] = useState(false);
 
   const access = async () => {
     setState("pending");
@@ -23,6 +25,7 @@ export function AccessReportButton({ recordId }: { recordId: string }) {
         return;
       }
       setContent(body.content);
+      setViewedAt(new Date().toLocaleString());
       setState("granted");
     } catch {
       setDenyReason("network error");
@@ -41,6 +44,20 @@ export function AccessReportButton({ recordId }: { recordId: string }) {
           Bob can now follow up with Alice — but only because she approved this, right now,
           in person. The agent never had the power to decide that on its own.
         </p>
+        <p className="mt-2 text-[10px] text-neutral-600">Viewed by Bob at {viewedAt}</p>
+
+        {followUp ? (
+          <p className="mt-4 text-xs text-emerald-300">
+            ✓ Follow-up with Alice scheduled (demo only).
+          </p>
+        ) : (
+          <button
+            onClick={() => setFollowUp(true)}
+            className="mt-4 w-full rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs font-medium text-emerald-300 transition hover:bg-emerald-500/20"
+          >
+            Schedule follow-up with Alice
+          </button>
+        )}
       </div>
     );
   }

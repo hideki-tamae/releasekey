@@ -6,14 +6,16 @@ import { useState } from "react";
 // record — still encrypted, no approval needed to view it (it's ciphertext,
 // safe to show freely). Contrast with AccessReportButton, which requires
 // approval and returns the decrypted plaintext.
+type StoredData = {
+  storageLocation: string;
+  storedAt: string;
+  recipientEns: string;
+  encryptedContent: { ciphertext: string };
+};
+
 export function ViewStoredButton({ recordId }: { recordId: string }) {
   const [state, setState] = useState<"idle" | "pending" | "shown" | "error">("idle");
-  const [data, setData] = useState<{
-    storageLocation: string;
-    storedAt: string;
-    recipientEns: string;
-    encryptedContent: { ciphertext: string };
-  } | null>(null);
+  const [data, setData] = useState<StoredData | null>(null);
 
   const view = async () => {
     setState("pending");
@@ -25,6 +27,18 @@ export function ViewStoredButton({ recordId }: { recordId: string }) {
     } catch {
       setState("error");
     }
+  };
+
+  const download = (payload: StoredData) => {
+    // Downloads exactly what's stored server-side — still ciphertext, so
+    // this is safe to hand out freely, same reasoning as the button itself.
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `voice-checkin-${recordId.slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   if (state === "shown" && data) {
@@ -46,6 +60,12 @@ export function ViewStoredButton({ recordId }: { recordId: string }) {
         <p className="mt-3 break-all font-mono text-[10px] text-neutral-600">
           {data.encryptedContent.ciphertext}
         </p>
+        <button
+          onClick={() => download(data)}
+          className="mt-4 w-full rounded-full border border-neutral-700 bg-neutral-950 px-4 py-2 text-xs font-medium text-neutral-300 transition hover:bg-neutral-800"
+        >
+          ⬇ Download encrypted report (.json)
+        </button>
       </div>
     );
   }
