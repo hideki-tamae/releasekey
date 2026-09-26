@@ -19,6 +19,13 @@ export default function Home() {
 
         <ConnectButton />
 
+        <a
+          href="/release"
+          className="mt-6 block text-center text-sm text-neutral-500 underline underline-offset-4 hover:text-neutral-300"
+        >
+          Try the release flow →
+        </a>
+
         <p className="mt-8 text-center text-xs text-neutral-600">
           Nothing is shared until you say so — every time.
         </p>
