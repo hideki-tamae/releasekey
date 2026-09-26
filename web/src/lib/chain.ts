@@ -58,12 +58,18 @@ export async function createCommitment(args: {
   commitment: Hex;
   recipientCommitment: Hex;
 }): Promise<Hex> {
-  return agentWalletClient.writeContract({
+  const hash = await agentWalletClient.writeContract({
     address: CONTRACT_ADDRESS,
     abi: releaseKeyAbi,
     functionName: "createCommitment",
     args: [args.recordId, args.commitment, args.recipientCommitment],
   });
+  // Wait for inclusion before returning: the release flow can reach
+  // approveRelease within seconds (fast World ID login), and if this
+  // commitment isn't mined yet the record is still Status.None on-chain,
+  // so approveRelease reverts with InvalidStatus.
+  await publicClient.waitForTransactionReceipt({ hash });
+  return hash;
 }
 
 /** Called only from the World ID callback, only after verifyWorldIdToken()
