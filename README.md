@@ -58,7 +58,7 @@ Known trade-offs, stated honestly:
 |---|---|
 | `ReleaseKey.sol` contract | [`0x56EdE4FbDED72B0e05F3Cc92bD41F98a74549686`](https://sepolia.etherscan.io/address/0x56EdE4FbDED72B0e05F3Cc92bD41F98a74549686) |
 | Deployment transaction | [View on Etherscan](https://sepolia.etherscan.io/tx/0x0fce010c7b0955ec1bcf8d2dbc1b3b9acb67f1dced8ea2f20ec940f7b3818310) |
-| Etherscan verification | Pending (requires `ETHERSCAN_API_KEY`) |
+| Etherscan verification | **Verified** — [view source](https://sepolia.etherscan.io/address/0x56ede4fbded72b0e05f3cc92bd41f98a74549686#code) |
 
 On-chain proof of the core invariant (checked live via `cast call` after deployment):
 
