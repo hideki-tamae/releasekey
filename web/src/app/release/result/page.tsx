@@ -1,3 +1,5 @@
+import { RevokeButton } from "./revoke-button";
+
 type SearchParams = Promise<{ status?: string; reason?: string; recordId?: string }>;
 
 // Renders both the success path and every failure path (denied, cancelled,
@@ -45,6 +47,8 @@ export default async function ReleaseResultPage({
         {recordId && (
           <p className="mt-4 font-mono text-xs break-all text-neutral-600">{recordId}</p>
         )}
+
+        {approved && recordId && <RevokeButton recordId={recordId} />}
 
         <a
           href="/release"

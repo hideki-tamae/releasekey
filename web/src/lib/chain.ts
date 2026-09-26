@@ -90,12 +90,14 @@ export async function approveRelease(args: {
 }
 
 export async function revoke(recordId: Hex): Promise<Hex> {
-  return approverWalletClient.writeContract({
+  const hash = await approverWalletClient.writeContract({
     address: CONTRACT_ADDRESS,
     abi: releaseKeyAbi,
     functionName: "revoke",
     args: [recordId],
   });
+  await publicClient.waitForTransactionReceipt({ hash });
+  return hash;
 }
 
 export async function isReleasable(recordId: Hex): Promise<boolean> {
