@@ -8,16 +8,19 @@ import { publicClient } from "./chain";
 
 export { encryptForRecipient, decryptAsRecipient, type EncryptedPayload } from "./ens-crypto";
 
-/** Looks up a recipient's encryption public key from their ENS name's
- * `com.releasekey.encryptionPubKey` text record. Never guess or accept
- * this key from client input — always resolve it fresh from ENS. */
-export async function getRecipientPublicKey(ensName: string): Promise<Hex> {
-  const value = await publicClient.getEnsText({
-    name: ensName,
-    key: "com.releasekey.encryptionPubKey",
-  });
+/** Looks up a recipient's encryption public key from an ENS text record.
+ * Multiple recipients can share one ENS name by using distinct text-record
+ * keys (e.g. `com.releasekey.encryptionPubKey` for Bob,
+ * `com.releasekey.encryptionPubKey.carol` for Carol) — see doctors.ts.
+ * Never guess or accept this key from client input — always resolve it
+ * fresh from ENS. */
+export async function getRecipientPublicKey(
+  ensName: string,
+  textRecordKey = "com.releasekey.encryptionPubKey"
+): Promise<Hex> {
+  const value = await publicClient.getEnsText({ name: ensName, key: textRecordKey });
   if (!value) {
-    throw new Error(`No encryption public key found for ENS name: ${ensName}`);
+    throw new Error(`No encryption public key found for ${ensName} (${textRecordKey})`);
   }
   return value as Hex;
 }

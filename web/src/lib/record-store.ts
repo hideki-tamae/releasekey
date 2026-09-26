@@ -12,6 +12,7 @@ import type { EncryptedPayload } from "./ens-crypto";
 
 export type StoredRecord = {
   recipientEns: string;
+  doctorId: string;
   encryptedContent: EncryptedPayload;
   createdAt: number;
 };

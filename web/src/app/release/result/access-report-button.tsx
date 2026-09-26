@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { getDoctor } from "@/lib/doctors";
 
 // Demo-only "view as the recipient" button — see api/records/[recordId]/content
 // for why decryption happens server-side here. Gated on isReleasable(recordId),
@@ -10,9 +11,13 @@ import { useState } from "react";
 export function AccessReportButton({ recordId }: { recordId: string }) {
   const [state, setState] = useState<"idle" | "pending" | "granted" | "denied">("idle");
   const [content, setContent] = useState<string | null>(null);
+  const [doctorId, setDoctorId] = useState<string | null>(null);
   const [denyReason, setDenyReason] = useState<string | null>(null);
   const [viewedAt, setViewedAt] = useState<string | null>(null);
   const [followUp, setFollowUp] = useState(false);
+
+  const doctor = doctorId ? getDoctor(doctorId) : undefined;
+  const doctorLabel = doctor?.label ?? "the recipient";
 
   const access = async () => {
     setState("pending");
@@ -25,6 +30,7 @@ export function AccessReportButton({ recordId }: { recordId: string }) {
         return;
       }
       setContent(body.content);
+      setDoctorId(body.doctorId ?? null);
       setViewedAt(new Date().toLocaleString());
       setState("granted");
     } catch {
@@ -37,14 +43,16 @@ export function AccessReportButton({ recordId }: { recordId: string }) {
     return (
       <div className="mt-6 w-full rounded-2xl border border-emerald-500/30 bg-emerald-500/5 px-6 py-4 text-left">
         <p className="mb-2 text-xs uppercase tracking-wide text-emerald-400">
-          Bob (the doctor) opens the report
+          {doctorLabel} opens the report
         </p>
         <p className="text-sm text-neutral-200">{content}</p>
         <p className="mt-3 text-xs text-neutral-500">
-          Bob can now follow up with Alice — but only because she approved this, right now,
-          in person. The agent never had the power to decide that on its own.
+          {doctorLabel} can now follow up with Alice — but only because she approved this,
+          right now, in person. The agent never had the power to decide that on its own.
         </p>
-        <p className="mt-2 text-[10px] text-neutral-600">Viewed by Bob at {viewedAt}</p>
+        <p className="mt-2 text-[10px] text-neutral-600">
+          Viewed by {doctorLabel} at {viewedAt}
+        </p>
 
         {followUp ? (
           <p className="mt-4 text-xs text-emerald-300">
@@ -69,10 +77,10 @@ export function AccessReportButton({ recordId }: { recordId: string }) {
         disabled={state === "pending"}
         className="rounded-full border border-neutral-700 bg-neutral-900 px-6 py-2 text-xs font-medium text-neutral-200 transition hover:bg-neutral-800 disabled:opacity-60"
       >
-        {state === "pending" ? "Checking…" : "View as Bob (the doctor)"}
+        {state === "pending" ? "Checking…" : "View report (as recipient)"}
       </button>
       {state === "denied" && (
-        <p className="max-w-xs text-xs text-red-400">Bob is denied: {denyReason}</p>
+        <p className="max-w-xs text-xs text-red-400">Access denied: {denyReason}</p>
       )}
     </div>
   );

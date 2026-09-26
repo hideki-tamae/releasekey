@@ -3,6 +3,7 @@ import type { Hex } from "viem";
 import { isReleasable } from "@/lib/chain";
 import { getStoredRecord } from "@/lib/record-store";
 import { decryptAsRecipient } from "@/lib/ens-crypto";
+import { getDoctor } from "@/lib/doctors";
 
 // GET /api/records/:recordId/content
 // Demo-only stand-in for "the recipient's own service fetches and decrypts
@@ -33,14 +34,22 @@ export async function GET(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const recipientPrivateKey = process.env.RECIPIENT_DEMO_PRIVATE_KEY as Hex | undefined;
+  const doctor = getDoctor(stored.doctorId);
+  const recipientPrivateKey = doctor
+    ? (process.env[doctor.privateKeyEnvVar] as Hex | undefined)
+    : undefined;
   if (!recipientPrivateKey) {
     return NextResponse.json({ error: "missing_recipient_key" }, { status: 500 });
   }
 
   try {
     const content = decryptAsRecipient(stored.encryptedContent, recipientPrivateKey);
-    return NextResponse.json({ recordId, recipientEns: stored.recipientEns, content });
+    return NextResponse.json({
+      recordId,
+      recipientEns: stored.recipientEns,
+      doctorId: stored.doctorId,
+      content,
+    });
   } catch (err) {
     console.error("decrypt failed:", err);
     return NextResponse.json({ error: "decrypt_failed" }, { status: 500 });

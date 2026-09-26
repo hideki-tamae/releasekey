@@ -1,10 +1,9 @@
+import type { Hex } from "viem";
 import { RevokeButton } from "./revoke-button";
 import { AccessReportButton } from "./access-report-button";
 import { ViewStoredButton } from "./view-stored-button";
-
-// Fixed for this demo — see release-flow-client.tsx. The recipient's
-// encryption key came from this same ENS name (com.releasekey.encryptionPubKey).
-const RECIPIENT_ENS = "releasekey.eth";
+import { getStoredRecord } from "@/lib/record-store";
+import { getDoctor } from "@/lib/doctors";
 
 type SearchParams = Promise<{ status?: string; reason?: string; recordId?: string }>;
 
@@ -18,6 +17,8 @@ export default async function ReleaseResultPage({
 }) {
   const { status, reason, recordId } = await searchParams;
   const approved = status === "approved";
+  const stored = recordId ? getStoredRecord(recordId as Hex) : undefined;
+  const doctor = stored ? getDoctor(stored.doctorId) : undefined;
 
   return (
     <main className="flex min-h-screen flex-1 flex-col items-center justify-center px-6">
@@ -40,12 +41,14 @@ export default async function ReleaseResultPage({
               <span className="text-neutral-200">approveRelease</span> was called on-chain.
               The release envelope expires shortly, by design.
             </p>
-            <p className="mt-3 text-xs text-neutral-500">
-              Released to: <span className="text-neutral-300">Bob (the doctor)</span>{" "}
-              <span className="font-mono text-neutral-500">— {RECIPIENT_ENS}</span> — the
-              content was encrypted to Bob&apos;s ENS-published public key when it was
-              prepared; only he can decrypt it.
-            </p>
+            {doctor && (
+              <p className="mt-3 text-xs text-neutral-500">
+                Released to: <span className="text-neutral-300">{doctor.label}</span>{" "}
+                <span className="font-mono text-neutral-500">— {doctor.ensName}</span> — the
+                content was encrypted to their ENS-published public key when it was
+                prepared; only they can decrypt it.
+              </p>
+            )}
           </>
         ) : (
           <p className="text-sm text-neutral-400">

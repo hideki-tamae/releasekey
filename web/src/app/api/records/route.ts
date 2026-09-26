@@ -5,6 +5,7 @@ import { createCommitment } from "@/lib/chain";
 import { getRecipientPublicKey } from "@/lib/ens-encryption";
 import { encryptForRecipient } from "@/lib/ens-crypto";
 import { storeRecord } from "@/lib/record-store";
+import { getDoctor } from "@/lib/doctors";
 
 // POST /api/records
 // Demo-only stand-in for "the agent prepares a release package". Content
@@ -33,10 +34,15 @@ function randomHex32(): Hex {
 }
 
 export async function POST(req: NextRequest) {
-  const { recipientEns, content: providedContent } = (await req.json().catch(() => ({}))) as {
-    recipientEns?: string;
+  const { doctorId, content: providedContent } = (await req.json().catch(() => ({}))) as {
+    doctorId?: string;
     content?: string;
   };
+
+  const doctor = doctorId ? getDoctor(doctorId) : undefined;
+  if (doctorId && !doctor) {
+    return NextResponse.json({ error: "unknown_doctor" }, { status: 400 });
+  }
 
   const recordId = randomHex32();
   const salt = randomHex32();
@@ -46,7 +52,7 @@ export async function POST(req: NextRequest) {
   const content =
     providedContent?.trim() ||
     `Voice check-in received (synthetic demo audio, record ${recordId}). ` +
-      `The agent prepared this record for ${recipientEns ?? "the recipient"} — content stays ` +
+      `The agent prepared this record for ${doctor?.label ?? "the recipient"} — content stays ` +
       `encrypted until a fresh human approval releases it.`;
 
   // Real hash of the real content — verifiable by anyone who later sees
@@ -64,11 +70,11 @@ export async function POST(req: NextRequest) {
   );
 
   let encryptedContent;
-  if (recipientEns) {
+  if (doctor) {
     try {
-      const recipientPublicKey = await getRecipientPublicKey(recipientEns);
+      const recipientPublicKey = await getRecipientPublicKey(doctor.ensName, doctor.textRecordKey);
       encryptedContent = encryptForRecipient(content, recipientPublicKey);
-      storeRecord(recordId, { recipientEns, encryptedContent });
+      storeRecord(recordId, { recipientEns: doctor.ensName, doctorId: doctor.id, encryptedContent });
     } catch (err) {
       console.error("encryption for recipient failed:", err);
       return NextResponse.json({ error: "encryption_failed" }, { status: 400 });
@@ -84,7 +90,7 @@ export async function POST(req: NextRequest) {
       contentHash,
       salt,
       txHash,
-      ...(encryptedContent && { recipientEns, encryptedContent }),
+      ...(encryptedContent && { doctorId: doctor!.id, recipientEns: doctor!.ensName, encryptedContent }),
     });
   } catch (err) {
     console.error("createCommitment failed:", err);
