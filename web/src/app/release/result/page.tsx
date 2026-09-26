@@ -41,10 +41,10 @@ export default async function ReleaseResultPage({
               The release envelope expires shortly, by design.
             </p>
             <p className="mt-3 text-xs text-neutral-500">
-              Released to:{" "}
-              <span className="font-mono text-neutral-300">{RECIPIENT_ENS}</span> — the
-              content was encrypted to this recipient&apos;s ENS-published public key when
-              it was prepared; only they can decrypt it.
+              Released to: <span className="text-neutral-300">Bob (the doctor)</span>{" "}
+              <span className="font-mono text-neutral-500">— {RECIPIENT_ENS}</span> — the
+              content was encrypted to Bob&apos;s ENS-published public key when it was
+              prepared; only he can decrypt it.
             </p>
           </>
         ) : (

@@ -34,9 +34,13 @@ export function AccessReportButton({ recordId }: { recordId: string }) {
     return (
       <div className="mt-6 w-full rounded-2xl border border-emerald-500/30 bg-emerald-500/5 px-6 py-4 text-left">
         <p className="mb-2 text-xs uppercase tracking-wide text-emerald-400">
-          Decrypted as recipient
+          Bob (the doctor) opens the report
         </p>
         <p className="text-sm text-neutral-200">{content}</p>
+        <p className="mt-3 text-xs text-neutral-500">
+          Bob can now follow up with Alice — but only because she approved this, right now,
+          in person. The agent never had the power to decide that on its own.
+        </p>
       </div>
     );
   }
@@ -48,10 +52,10 @@ export function AccessReportButton({ recordId }: { recordId: string }) {
         disabled={state === "pending"}
         className="rounded-full border border-neutral-700 bg-neutral-900 px-6 py-2 text-xs font-medium text-neutral-200 transition hover:bg-neutral-800 disabled:opacity-60"
       >
-        {state === "pending" ? "Checking…" : "Access report (as recipient)"}
+        {state === "pending" ? "Checking…" : "View as Bob (the doctor)"}
       </button>
       {state === "denied" && (
-        <p className="max-w-xs text-xs text-red-400">Access denied: {denyReason}</p>
+        <p className="max-w-xs text-xs text-red-400">Bob is denied: {denyReason}</p>
       )}
     </div>
   );

@@ -68,7 +68,8 @@ export function ReleaseFlowClient() {
   return (
     <div className="flex flex-col items-center gap-4 text-center">
       <p className="text-xs text-neutral-500">
-        Recipient: <span className="font-mono text-neutral-300">{RECIPIENT_ENS}</span>
+        Recipient: <span className="text-neutral-300">Bob (the doctor)</span>{" "}
+        <span className="font-mono text-neutral-500">— {RECIPIENT_ENS}</span>
       </p>
 
       {stage === "idle" && (
@@ -103,7 +104,9 @@ export function ReleaseFlowClient() {
             </div>
             <div className="flex justify-between gap-4">
               <dt className="text-neutral-500">Recipient</dt>
-              <dd className="font-mono text-neutral-200">{RECIPIENT_ENS}</dd>
+              <dd className="text-neutral-200">
+                Bob (the doctor) <span className="font-mono text-neutral-500">— {RECIPIENT_ENS}</span>
+              </dd>
             </div>
             <div className="flex justify-between gap-4">
               <dt className="text-neutral-500">Content</dt>
