@@ -123,11 +123,17 @@ export function ReleaseFlowClient() {
       {stage === "ready" && recordId && (
         <>
           <p className="font-mono text-xs break-all text-neutral-500">{recordId}</p>
+          <div className="w-full rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-left text-xs text-amber-200">
+            You are about to confirm releasing this record to{" "}
+            <span className="font-medium">Bob (the doctor)</span>. Continuing takes you to
+            World ID for a fresh, in-person verification — this cannot be undone by the
+            agent afterward.
+          </div>
           <a
             href={`/api/world/authorize?recordId=${recordId}`}
             className="w-full rounded-full bg-emerald-500 px-8 py-3.5 text-sm font-medium text-neutral-950 transition hover:bg-emerald-400"
           >
-            Release (verify with World ID)
+            Confirm & continue to World ID
           </a>
         </>
       )}

@@ -161,7 +161,12 @@ used for local development — see the note in Setup below.
 - World ID for Agents runs against the **sandbox** environment (`sandbox.auth.world.org`), which uses fake identities by design — this is the intended integration point for a hackathon demo, not a claim of production Orb verification.
 - Local dev HTTPS uses a self-signed certificate; browsers show a one-time warning.
 - ENS integration is a single name (`releasekey.eth`) holding one recipient's public key, not per-recipient subnames + Enhanced Access Control (the original SPEC §7 stretch scope) — that fuller version is future work, not claimed as live.
-- Security is demo-grade throughout; no production key-management claims are made.
+- Security is demo-grade throughout; no production key-management claims are made. Specifically:
+  - **`recordId` is a bearer capability, not proof of identity.** World ID proves *a* fresh human approved — it does not check that the approving human is the record's actual owner. Anyone holding a `recordId` could open its authorize link and approve it with their own World ID. Treat `recordId` as a secret, same as a capability URL.
+  - **Decryption in this demo happens server-side**, using a recipient key we hold (`RECIPIENT_DEMO_PRIVATE_KEY`), purely so the flow is visible without a second wallet in the browser. In a real deployment the recipient's own client must decrypt with a key we never see — a server that can decrypt "on behalf of" the recipient defeats the point.
+  - **The `AGENT_ROLE` and `APPROVER_ROLE` keys are both held by the same operator** in this demo (both are Vercel env vars in one project). The on-chain role separation is real and enforced by the contract, but the *organizational* separation it's meant to model — an independent approver a single operator can't control — is not actually in place here.
+  - **Revoking doesn't undo an access that already happened.** If a recipient already viewed and copied the plaintext before revoke, revoking stops *future* access through this system; it cannot retract what was already seen — no access-control system can.
+  - **In-memory storage (`record-store.ts`, `pending-release-store.ts`) does not survive a server restart or cold start.** A real deployment needs persistent storage (e.g. Redis) for both; we chose not to add new infrastructure this close to the deadline given how much of the night's debugging (World ID, ENSv2) came from unfamiliar integrations, and judged that risk higher than the cost of documenting this clearly instead.
 
 ## Sponsor integrations — actually live vs. planned
 
