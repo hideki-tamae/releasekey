@@ -2,6 +2,8 @@ import type { Hex } from "viem";
 import { RevokeButton } from "./revoke-button";
 import { AccessReportButton } from "./access-report-button";
 import { ViewStoredButton } from "./view-stored-button";
+import { AuditTrail } from "./audit-trail";
+import { DENY_REASON_TEXT, type DenyReason } from "@/lib/release-decision";
 import { getStoredRecord } from "@/lib/record-store";
 import { getDoctor } from "@/lib/doctors";
 
@@ -52,6 +54,9 @@ export default async function ReleaseResultPage({
           </>
         ) : (
           <p className="text-sm text-neutral-400">
+            {reason && reason in DENY_REASON_TEXT && (
+              <span className="mb-2 block text-neutral-200">{DENY_REASON_TEXT[reason as DenyReason]}</span>
+            )}
             No approval was ever attempted on-chain.{" "}
             {reason && (
               <>
@@ -68,6 +73,7 @@ export default async function ReleaseResultPage({
         {recordId && <ViewStoredButton recordId={recordId} />}
         {approved && recordId && <AccessReportButton recordId={recordId} />}
         {approved && recordId && <RevokeButton recordId={recordId} />}
+        {recordId && <AuditTrail recordId={recordId} />}
 
         <a
           href="/release"

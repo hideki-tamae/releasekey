@@ -117,3 +117,25 @@ not just approving what Claude proposed.
 
 `SPEC.md` is the plan file the implementation follows and is kept in the
 repo, per SPEC.md §8/§10.
+
+## v2 (post-hackathon, 2026-09-30)
+
+v2 was designed and implemented with Claude (Anthropic) after the event,
+on the `v2` branch, starting from the frozen v1 branch `v1-ethglobal-tokyo-2026`.
+
+- **Analysis:** Claude re-verified the ETHGlobal Tokyo 2026 results against
+  the official Showcase and the closing-ceremony transcript, then compared
+  HAIS Agent with the finalists and prize winners (Airlock, Yohaku,
+  Omamori). Hideki chose the direction ("make HAIS Agent the recommended
+  version") and asked for a before/after that stays visible on GitHub.
+- **Spec:** `SPEC-v2.md` and `docs/v2/*` were drafted by Claude from that
+  analysis; scope (Phase 1 implemented, Phase 2/3 designed only) and the
+  rule "no auto-release, ever" were kept from v1.
+- **Code:** Claude wrote the Phase 1 modules and their tests
+  (`disclosure`, `reid-check`, `consent-policy`, `ens-policy`,
+  `release-decision`, `audit-log`), wired them into the API routes and UI,
+  and verified: 47 unit tests passing, lint clean, `next build` passing,
+  and the policy-denial path exercised live against a running build
+  (screenshots in `docs/v2/img`). The approval path still needs a real
+  World ID + Sepolia run by a human before it is claimed as live.
+- The deployed contract is unchanged.

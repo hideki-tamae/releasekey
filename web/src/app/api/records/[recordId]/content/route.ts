@@ -4,6 +4,7 @@ import { isReleasable } from "@/lib/chain";
 import { getStoredRecord } from "@/lib/record-store";
 import { decryptAsRecipient } from "@/lib/ens-crypto";
 import { getDoctor } from "@/lib/doctors";
+import { auditLog } from "@/lib/audit-log";
 
 // GET /api/records/:recordId/content
 // Demo-only stand-in for "the recipient's own service fetches and decrypts
@@ -23,6 +24,8 @@ export async function GET(
 
   const releasable = await isReleasable(recordId as Hex);
   if (!releasable) {
+    // v2: a refused access is a first-class, auditable event.
+    auditLog.append(recordId, "access_refused", { reason: "not_releasable" });
     return NextResponse.json(
       { error: "not_releasable", message: "This record is not currently approved for access." },
       { status: 403 }
@@ -44,6 +47,7 @@ export async function GET(
 
   try {
     const content = decryptAsRecipient(stored.encryptedContent, recipientPrivateKey);
+    auditLog.append(recordId, "access_granted", { details: { recipient: stored.doctorId } });
     return NextResponse.json({
       recordId,
       recipientEns: stored.recipientEns,

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { DOCTORS } from "@/lib/doctors";
+import { SharePreview, type Disclosure } from "./share-preview";
 
 // Client-side glue for the demo flow:
 // 1. "Voice check-in" → real browser speech-to-text (Web Speech API) turns
@@ -18,7 +19,7 @@ import { DOCTORS } from "@/lib/doctors";
 //    the moment of release" step, so it must never be an XHR/fetch call).
 const LISTEN_DURATION_MS = 4000;
 
-type Stage = "picking" | "idle" | "listening" | "preparing" | "ready";
+type Stage = "picking" | "idle" | "listening" | "preparing" | "ready" | "denied";
 
 export function ReleaseFlowClient() {
   const [stage, setStage] = useState<Stage>("picking");
@@ -28,6 +29,8 @@ export function ReleaseFlowClient() {
   const [ciphertextPreview, setCiphertextPreview] = useState<string | null>(null);
   const [transcript, setTranscript] = useState("");
   const [finalContent, setFinalContent] = useState<string | null>(null);
+  const [disclosure, setDisclosure] = useState<Disclosure | null>(null);
+  const [denial, setDenial] = useState<{ reason: string; message: string } | null>(null);
 
   const doctor = DOCTORS.find((d) => d.id === doctorId);
 
@@ -86,6 +89,8 @@ export function ReleaseFlowClient() {
     setCiphertextPreview(null);
     setTranscript("");
     setFinalContent(null);
+    setDisclosure(null);
+    setDenial(null);
 
     const fallbackContent =
       "Voice check-in received (speech recognition unavailable — using demo text). " +
@@ -108,6 +113,15 @@ export function ReleaseFlowClient() {
         body: JSON.stringify({ doctorId: doctor.id, content }),
       });
       const body = await res.json();
+      if (body.disclosure) setDisclosure(body.disclosure);
+      // v2: a policy refusal is a normal, explained outcome — not an error.
+      if (res.status === 403 && body.error === "policy_denied") {
+        setRecordId(body.recordId);
+        setDenial({ reason: body.reason, message: body.message });
+        setStatus(null);
+        setStage("denied");
+        return;
+      }
       if (!res.ok) throw new Error(body.error ?? "failed");
       setRecordId(body.recordId);
       if (body.encryptedContent) {
@@ -194,8 +208,9 @@ export function ReleaseFlowClient() {
             Voice check-in — report
           </p>
           {finalContent && (
-            <p className="mb-3 rounded-lg bg-neutral-950 px-3 py-2 text-xs italic text-neutral-400">
-              &ldquo;{finalContent}&rdquo;
+            <p className="mb-3 rounded-lg bg-neutral-950 px-3 py-2 text-xs italic text-neutral-500">
+              You said: &ldquo;{finalContent}&rdquo;{" "}
+              <span className="not-italic text-neutral-600">(stays with you — not stored)</span>
             </p>
           )}
           <dl className="space-y-1.5 text-sm">
@@ -218,6 +233,32 @@ export function ReleaseFlowClient() {
               <dd className="text-amber-300">Awaiting your approval</dd>
             </div>
           </dl>
+        </div>
+      )}
+
+      {(stage === "ready" || stage === "denied") && disclosure && <SharePreview disclosure={disclosure} />}
+
+      {stage === "denied" && denial && (
+        <div className="w-full rounded-2xl border border-red-500/40 bg-red-500/10 px-5 py-4 text-left">
+          <p className="text-sm font-medium text-red-200">Not shared — stopped before anything happened</p>
+          <p className="mt-1 text-xs text-red-200/80">{denial.message}</p>
+          <p className="mt-2 font-mono text-[11px] text-red-300/70">
+            reason: {denial.reason} · no on-chain call · logged to the audit trail
+          </p>
+          {recordId && (
+            <a
+              href={`/release/result?status=denied&reason=${denial.reason}&recordId=${recordId}`}
+              className="mt-3 inline-block text-xs text-red-200 underline underline-offset-2"
+            >
+              See the audit trail
+            </a>
+          )}
+          <button
+            onClick={() => setStage("idle")}
+            className="mt-3 block text-xs text-neutral-300 underline underline-offset-2"
+          >
+            Try again with fewer details
+          </button>
         </div>
       )}
 

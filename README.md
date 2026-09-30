@@ -1,5 +1,13 @@
 # ReleaseKey
 
+> **v2 (branch `v2`) — HAIS Agent, recommended version.** Adds minimal
+> disclosure, a re-identification check, an ENS-hosted consent policy, a
+> fail-closed decision router and a hash-chained audit log, so every refusal is
+> as visible as every release. Spec: [`SPEC-v2.md`](./SPEC-v2.md) ·
+> Japanese overview & before/after: [`docs/v2/OVERVIEW.ja.md`](./docs/v2/OVERVIEW.ja.md) ·
+> Roadmap: [`docs/v2/ROADMAP.md`](./docs/v2/ROADMAP.md).
+> The ETHGlobal Tokyo 2026 submission is frozen on branch `v1-ethglobal-tokyo-2026`.
+
 An AI agent can **prepare** a sensitive record for sharing, but can **never release it alone** — every release requires a fresh, backend-validated human verification at the moment of release, and the chain stores only a minimal commitment, never content or personal data.
 
 Full design rationale, scope, and requirements: see [`SPEC.md`](./SPEC.md).
