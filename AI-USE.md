@@ -121,7 +121,7 @@ repo, per SPEC.md §8/§10.
 ## v2 (post-hackathon, 2026-09-30)
 
 v2 was designed and implemented with Claude (Anthropic) after the event,
-on the `v2` branch, starting from the frozen v1 tag `v1-ethglobal-tokyo-2026`.
+on the `v2` branch, starting from the frozen v1 branch `v1-ethglobal-tokyo-2026`.
 
 - **Analysis:** Claude re-verified the ETHGlobal Tokyo 2026 results against
   the official Showcase and the closing-ceremony transcript, then compared

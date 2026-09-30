@@ -1,7 +1,7 @@
 # HAIS Agent v2 (ReleaseKey v2) — SPEC
 
 > Source of truth for the v2 branch. v1 (the ETHGlobal Tokyo 2026 submission) is
-> frozen at tag `v1-ethglobal-tokyo-2026` and described by [`SPEC.md`](./SPEC.md).
+> frozen on branch `v1-ethglobal-tokyo-2026` and described by [`SPEC.md`](./SPEC.md).
 > AI coding agents: read this whole file before writing code. Do not expand scope beyond it.
 > Author: Hideki Tamae. Japanese overview: [`docs/v2/OVERVIEW.ja.md`](./docs/v2/OVERVIEW.ja.md).
 
