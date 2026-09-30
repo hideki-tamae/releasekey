@@ -6,29 +6,26 @@ import { getRecipientPublicKey } from "@/lib/ens-encryption";
 import { encryptForRecipient } from "@/lib/ens-crypto";
 import { storeRecord } from "@/lib/record-store";
 import { getDoctor } from "@/lib/doctors";
+import { redact, type RedactionResult } from "@/lib/disclosure";
+import { assessReidentificationRisk } from "@/lib/reid-check";
+import { loadConsentPolicy } from "@/lib/ens-policy";
+import { decideRelease, DENY_REASON_TEXT } from "@/lib/release-decision";
+import { auditLog } from "@/lib/audit-log";
 
-// POST /api/records
-// Demo-only stand-in for "the agent prepares a release package". Content
-// is synthetic — SPEC.md §3/§4: no real personal data anywhere in this
-// demo. Generates a fresh recordId + salted commitments and registers
-// them on-chain with the AGENT_ROLE wallet. This endpoint can never
-// approve anything — createCommitment leaves the record in `Created`,
-// which only APPROVER_ROLE (via the World ID callback) can move forward.
+// POST /api/records — the agent prepares a release package (SPEC-v2 §6).
 //
-// Optional `content`: the real record text (e.g. a transcribed voice
-// check-in). `contentHash` is keccak256 of this *actual* content — not a
-// random placeholder — so the on-chain commitment is genuinely verifiable:
-// anyone who is later shown the plaintext can recompute
-// keccak256(content, salt) and check it against the on-chain commitment
-// to prove it hasn't been altered since it was prepared. Falls back to a
-// fixed synthetic string if no content is given (e.g. calls that don't
-// use the voice check-in UI).
+// v2 pipeline, all BEFORE any on-chain call:
+//   1. redact direct identifiers (minimal disclosure)       — lib/disclosure.ts
+//   2. score what is left for re-identification risk         — lib/reid-check.ts
+//   3. load the data subject's consent policy (ENS, strict default)
+//   4. ordered, fail-closed decision: deny, or require a human — lib/release-decision.ts
+// A deny returns 403 with the reason and never touches the chain. Every step
+// is appended to the hash-chained audit log (no content, no personal data).
 //
-// Optional `recipientEns`: if given, this same content is actually
-// encrypted to that recipient's public key (published as an ENS text
-// record — see lib/ens-encryption.ts). Only the recipient's private key
-// can ever decrypt `encryptedContent`; we never see it in the clear once
-// this returns, and neither does anyone reading the chain or ENS.
+// Only the SHARED text (redacted unless the policy says "full") is hashed,
+// encrypted and committed. The original text lives only in this request's
+// memory; it is never stored, logged or returned. Content is synthetic in
+// the demo — SPEC.md §3/§4: no real personal data.
 function randomHex32(): Hex {
   return `0x${randomBytes(32).toString("hex")}`;
 }
@@ -40,49 +37,93 @@ export async function POST(req: NextRequest) {
   };
 
   const doctor = doctorId ? getDoctor(doctorId) : undefined;
-  if (doctorId && !doctor) {
-    return NextResponse.json({ error: "unknown_doctor" }, { status: 400 });
+  const recordId = randomHex32();
+
+  const originalText =
+    providedContent?.trim() ||
+    `Voice check-in received (synthetic demo audio). The agent prepared this record for ` +
+      `${doctor?.label ?? "the recipient"} — content stays encrypted until a fresh human approval releases it.`;
+
+  // 1–4: minimal disclosure → risk → policy → decision
+  const policy = await loadConsentPolicy();
+  const redaction: RedactionResult | null = policy.disclosure === "redacted" ? redact(originalText) : null;
+  const sharedText = redaction ? redaction.redactedText : originalText;
+  const risk = assessReidentificationRisk(sharedText);
+  const decision = decideRelease(
+    { recipientId: doctorId, recipientKnown: Boolean(doctor), sharedText, redaction, risk },
+    policy
+  );
+
+  const disclosure = {
+    mode: policy.disclosure,
+    sharedText,
+    removed: redaction?.summary ?? null,
+    totalRedacted: redaction?.totalRedacted ?? 0,
+    risk,
+    policy: {
+      source: policy.source,
+      maxReidRisk: policy.maxReidRisk,
+      maxTtlSeconds: policy.maxTtlSeconds,
+      disclosure: policy.disclosure,
+    },
+  };
+
+  auditLog.append(recordId, "redacted", {
+    details: {
+      totalRedacted: disclosure.totalRedacted,
+      riskScore: risk.score,
+      policySource: policy.source,
+    },
+  });
+
+  if (decision.outcome === "deny") {
+    auditLog.append(recordId, "policy_denied", { reason: decision.reason, details: { rule: decision.rule } });
+    return NextResponse.json(
+      {
+        error: "policy_denied",
+        reason: decision.reason,
+        message: DENY_REASON_TEXT[decision.reason],
+        recordId,
+        decision,
+        disclosure,
+      },
+      { status: 403 }
+    );
   }
 
-  const recordId = randomHex32();
+  // From here on the decision is `require_human`: we only PREPARE. Approval
+  // still needs a fresh World ID verification (api/world/callback).
   const salt = randomHex32();
   const recipientNode = randomHex32(); // stand-in for an ENS-style recipient node
   const recipientSalt = randomHex32();
 
-  const content =
-    providedContent?.trim() ||
-    `Voice check-in received (synthetic demo audio, record ${recordId}). ` +
-      `The agent prepared this record for ${doctor?.label ?? "the recipient"} — content stays ` +
-      `encrypted until a fresh human approval releases it.`;
-
-  // Real hash of the real content — verifiable by anyone who later sees
-  // the plaintext, not a decorative placeholder.
-  const contentHash = keccak256(toBytes(content));
-
+  // Real hash of exactly what will be shared (the redacted text by default).
+  const contentHash = keccak256(toBytes(sharedText));
   const commitment = keccak256(
     encodeAbiParameters([{ type: "bytes32" }, { type: "bytes32" }], [contentHash, salt])
   );
   const recipientCommitment = keccak256(
-    encodeAbiParameters(
-      [{ type: "bytes32" }, { type: "bytes32" }],
-      [recipientNode, recipientSalt]
-    )
+    encodeAbiParameters([{ type: "bytes32" }, { type: "bytes32" }], [recipientNode, recipientSalt])
   );
 
   let encryptedContent;
-  if (doctor) {
-    try {
-      const recipientPublicKey = await getRecipientPublicKey(doctor.ensName, doctor.textRecordKey);
-      encryptedContent = encryptForRecipient(content, recipientPublicKey);
-      storeRecord(recordId, { recipientEns: doctor.ensName, doctorId: doctor.id, encryptedContent });
-    } catch (err) {
-      console.error("encryption for recipient failed:", err);
-      return NextResponse.json({ error: "encryption_failed" }, { status: 400 });
-    }
+  try {
+    const recipientPublicKey = await getRecipientPublicKey(doctor!.ensName, doctor!.textRecordKey);
+    encryptedContent = encryptForRecipient(sharedText, recipientPublicKey);
+    storeRecord(recordId, {
+      recipientEns: doctor!.ensName,
+      doctorId: doctor!.id,
+      encryptedContent,
+      ttlSeconds: decision.ttlSeconds,
+    });
+  } catch (err) {
+    console.error("encryption for recipient failed:", err);
+    return NextResponse.json({ error: "encryption_failed" }, { status: 400 });
   }
 
   try {
     const txHash = await createCommitment({ recordId, commitment, recipientCommitment });
+    auditLog.append(recordId, "prepared", { details: { ttlSeconds: decision.ttlSeconds } });
     return NextResponse.json({
       recordId,
       commitment,
@@ -90,7 +131,11 @@ export async function POST(req: NextRequest) {
       contentHash,
       salt,
       txHash,
-      ...(encryptedContent && { doctorId: doctor!.id, recipientEns: doctor!.ensName, encryptedContent }),
+      decision,
+      disclosure,
+      doctorId: doctor!.id,
+      recipientEns: doctor!.ensName,
+      encryptedContent,
     });
   } catch (err) {
     console.error("createCommitment failed:", err);

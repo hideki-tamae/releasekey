@@ -14,6 +14,8 @@ export type StoredRecord = {
   recipientEns: string;
   doctorId: string;
   encryptedContent: EncryptedPayload;
+  /** Approval TTL decided by the consent policy (SPEC-v2 §3.4). */
+  ttlSeconds?: number;
   createdAt: number;
 };
 
