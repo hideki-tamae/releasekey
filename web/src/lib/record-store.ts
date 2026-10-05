@@ -13,9 +13,14 @@ import type { EncryptedPayload } from "./ens-crypto";
 export type StoredRecord = {
   recipientEns: string;
   doctorId: string;
-  encryptedContent: EncryptedPayload;
+  /** Absent for a refused record: nothing was encrypted or committed. */
+  encryptedContent?: EncryptedPayload;
+  /** Set for a record refused before the chain. It keeps no content, only the reason code. */
+  refusedReason?: string;
   /** Approval TTL decided by the consent policy (SPEC-v2 §3.4). */
   ttlSeconds?: number;
+  /** Set only for a follow-up record that belongs to a thread (Phase 1.5). */
+  threadId?: string;
   createdAt: number;
 };
 
@@ -23,6 +28,11 @@ const records = new Map<Hex, StoredRecord>();
 
 export function storeRecord(recordId: Hex, entry: Omit<StoredRecord, "createdAt">): void {
   records.set(recordId, { ...entry, createdAt: Date.now() });
+}
+
+/** Keeps a refusal so it can be the origin of a follow-up. No content is stored. */
+export function storeRefusal(recordId: Hex, entry: { recipientEns: string; doctorId: string; reason: string }): void {
+  records.set(recordId, { ...entry, refusedReason: entry.reason, createdAt: Date.now() });
 }
 
 export function getStoredRecord(recordId: Hex): StoredRecord | undefined {

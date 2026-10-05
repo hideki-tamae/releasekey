@@ -153,3 +153,8 @@ on the `v2` branch, starting from the frozen v1 branch `v1-ethglobal-tokyo-2026`
 **Done by AI (Claude):** the doctor-discovery code (`doctor-search.ts`, `/doctors`,
 the `?doctorId=` hand-off), its tests, the SPEC-v2 Phase 1.5 text, and `docs/v2/FEEDBACK.md`
 from the feedback quoted by Hideki. Nothing in the contract or in `src/` or `test/` was changed.
+
+**Phase 1.5 part 2 (follow-up threads), done by AI (Claude):** `prepare-release.ts` (the
+pipeline extracted from `POST /api/records`, behaviour unchanged), `thread-store.ts`, the
+`/api/threads` routes, `/thread/:id`, their tests (80 web tests in total). The thread is a
+grouping only: approval stays per record, and the doctor's replies are a fixed menu.

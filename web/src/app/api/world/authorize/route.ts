@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { isHex } from "viem";
 import { buildAuthorizeUrl, createAuthRequestSecrets } from "@/lib/world-oidc";
 import { pendingReleaseStore } from "@/lib/pending-release-store";
+import { getStoredRecord } from "@/lib/record-store";
+import type { Hex } from "viem";
 
 // GET /api/world/authorize?recordId=0x...
 // Starts a brand-new World ID for Agents verification, bound to a single
@@ -12,6 +14,11 @@ export async function GET(req: NextRequest) {
 
   if (!recordId || !isHex(recordId, { strict: true }) || recordId.length !== 66) {
     return NextResponse.json({ error: "invalid_record_id" }, { status: 400 });
+  }
+
+  // A refused record was never committed on-chain and must not be approvable.
+  if (getStoredRecord(recordId as Hex)?.refusedReason) {
+    return NextResponse.json({ error: "record_refused" }, { status: 409 });
   }
 
   const { codeVerifier, codeChallenge, state, nonce } = createAuthRequestSecrets();

@@ -21,7 +21,11 @@ export type AuditEventType =
   | "approved"
   | "access_granted"
   | "access_refused"
-  | "revoked";
+  | "revoked"
+  // Phase 1.5 part 2: thread events. Attached to a record and marked with
+  // details.threadId, so the thread's history can be filtered out of the log.
+  | "thread_opened"
+  | "thread_reply";
 
 export type AuditDetails = Record<string, string | number | boolean>;
 
@@ -90,6 +94,11 @@ export class AuditLog {
   entries(recordId?: string): AuditEntry[] {
     const all = this.log.map((e) => ({ ...e, details: e.details && { ...e.details } }));
     return recordId ? all.filter((e) => e.recordId === recordId) : all;
+  }
+
+  /** All entries (copies) that carry this threadId in their details. */
+  entriesForThread(threadId: string): AuditEntry[] {
+    return this.entries().filter((e) => e.details?.threadId === threadId);
   }
 
   head(): Hex {

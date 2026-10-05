@@ -56,7 +56,7 @@ Evidence (public Showcase + closing ceremony, 2026-09-27; full analysis in
    what categories were removed, the risk score, and the policy applied.
    The result screen shows the audit trail and its verification status.
 
-### Phase 1.5 — doctor discovery (part 1, implemented) · follow-up thread (part 2, not yet)
+### Phase 1.5 — doctor discovery (part 1, implemented) · follow-up thread (part 2, implemented)
 Feedback that drives this: [`docs/v2/FEEDBACK.md`](./docs/v2/FEEDBACK.md). Order: doctor first, follow-up second.
 - **Doctor search** (`/doctors`, `web/src/lib/doctor-search.ts`): filter by prefecture, city,
   minimum rating (1.0–5.0) and minimum review count; sorted by rating, then reviews.
@@ -67,9 +67,24 @@ Feedback that drives this: [`docs/v2/FEEDBACK.md`](./docs/v2/FEEDBACK.md). Order
   the router denies any other id as `unknown_recipient`. The decision rules are unchanged.
 - **Synthetic demo data:** all doctors, areas, ratings and review counts are fictional.
   The UI labels them as demo values. They are not real reviews.
-- **Follow-up thread (part 2, not implemented):** a thread groups later records with a
-  doctor. Each share in a thread is a new record with its own fresh human approval. A thread
-  never carries an approval, a TTL or an auto-release.
+- **Follow-up thread (part 2, implemented):** the doctor books a thread from a record
+  (`POST /api/threads`). Booking shares nothing. A follow-up is a new record
+  (`POST /api/threads/:id/records`) that goes through the same prepare pipeline as a first
+  record, with `threadId` on every audit entry. It needs its own fresh World ID approval.
+  A refused follow-up is logged in the thread, and the thread stays open. The doctor replies
+  from a fixed menu of codes only (`POST /api/threads/:id/replies`). A thread carries no
+  approval, no TTL and no auto-release.
+  - **Origin rule:** a thread can start only from a decided record: approved, revoked, or
+    refused (`web/src/lib/thread-origin.ts`). A record still awaiting approval (`Created`) cannot.
+    A refusal is kept with its reason code and no content.
+  - **Known limitations (Phase 1.5 part 2):**
+    - There is no API to close a thread. `ThreadStore.close()` exists in code, but no route calls it.
+    - The doctor is not authenticated. Anyone holding a `recordId` can book a thread, and anyone
+      holding a `threadId` can reply or prepare a follow-up. Both are bearer capabilities
+      (same as `recordId`, see README Known limitations).
+    - Threads and refusals live in one process's memory and are lost on restart.
+    - A follow-up's sequence number is assigned when its record is attached, so a refused
+      follow-up takes no number.
 
 ### Phase 2 — designed, not implemented (see `docs/v2/ROADMAP.md`)
 - **MynaWallet (JPKI)** professional attestation for recipients (doctors,

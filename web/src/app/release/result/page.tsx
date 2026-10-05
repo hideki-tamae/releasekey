@@ -2,6 +2,7 @@ import type { Hex } from "viem";
 import { RevokeButton } from "./revoke-button";
 import { AccessReportButton } from "./access-report-button";
 import { ViewStoredButton } from "./view-stored-button";
+import { BookFollowupButton } from "./book-followup-button";
 import { AuditTrail } from "./audit-trail";
 import { DENY_REASON_TEXT, type DenyReason } from "@/lib/release-decision";
 import { getStoredRecord } from "@/lib/record-store";
@@ -70,7 +71,19 @@ export default async function ReleaseResultPage({
           <p className="mt-4 font-mono text-xs break-all text-neutral-600">{recordId}</p>
         )}
 
-        {recordId && <ViewStoredButton recordId={recordId} />}
+        {stored?.threadId && (
+          <a
+            href={`/thread/${stored.threadId}`}
+            className="mt-4 inline-block text-sm text-neutral-300 underline underline-offset-4 hover:text-white"
+          >
+            This is a follow-up in a thread → back to the thread
+          </a>
+        )}
+        {/* A thread can start only from a decided record: approved, or refused. Never from one awaiting approval. */}
+        {recordId && stored && !stored.threadId && (approved || stored.refusedReason) && (
+          <BookFollowupButton recordId={recordId} />
+        )}
+        {recordId && stored?.encryptedContent && <ViewStoredButton recordId={recordId} />}
         {approved && recordId && <AccessReportButton recordId={recordId} />}
         {approved && recordId && <RevokeButton recordId={recordId} />}
         {recordId && <AuditTrail recordId={recordId} />}
