@@ -56,6 +56,21 @@ Evidence (public Showcase + closing ceremony, 2026-09-27; full analysis in
    what categories were removed, the risk score, and the policy applied.
    The result screen shows the audit trail and its verification status.
 
+### Phase 1.5 — doctor discovery (part 1, implemented) · follow-up thread (part 2, not yet)
+Feedback that drives this: [`docs/v2/FEEDBACK.md`](./docs/v2/FEEDBACK.md). Order: doctor first, follow-up second.
+- **Doctor search** (`/doctors`, `web/src/lib/doctor-search.ts`): filter by prefecture, city,
+  minimum rating (1.0–5.0) and minimum review count; sorted by rating, then reviews.
+  Location is coarse (prefecture / city) — no coordinates are used or stored. The query is
+  not logged. Invalid query values are ignored, never widened.
+- **Bookable only with a key:** doctors without a published encryption key are listed as
+  "sharing not possible" and cannot be chosen. `getDoctor()` resolves only keyed doctors, so
+  the router denies any other id as `unknown_recipient`. The decision rules are unchanged.
+- **Synthetic demo data:** all doctors, areas, ratings and review counts are fictional.
+  The UI labels them as demo values. They are not real reviews.
+- **Follow-up thread (part 2, not implemented):** a thread groups later records with a
+  doctor. Each share in a thread is a new record with its own fresh human approval. A thread
+  never carries an approval, a TTL or an auto-release.
+
 ### Phase 2 — designed, not implemented (see `docs/v2/ROADMAP.md`)
 - **MynaWallet (JPKI)** professional attestation for recipients (doctors,
   care staff): a recipient must prove a real, publicly-certified identity

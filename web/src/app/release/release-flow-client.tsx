@@ -21,9 +21,9 @@ const LISTEN_DURATION_MS = 4000;
 
 type Stage = "picking" | "idle" | "listening" | "preparing" | "ready" | "denied";
 
-export function ReleaseFlowClient() {
-  const [stage, setStage] = useState<Stage>("picking");
-  const [doctorId, setDoctorId] = useState<string | null>(null);
+export function ReleaseFlowClient({ initialDoctorId = null }: { initialDoctorId?: string | null }) {
+  const [stage, setStage] = useState<Stage>(initialDoctorId ? "idle" : "picking");
+  const [doctorId, setDoctorId] = useState<string | null>(initialDoctorId);
   const [recordId, setRecordId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [ciphertextPreview, setCiphertextPreview] = useState<string | null>(null);
