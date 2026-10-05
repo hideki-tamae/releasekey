@@ -1,25 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isHex, type Hex } from "viem";
 import { randomBytes } from "crypto";
-import { getRecord } from "@/lib/chain";
 import { getStoredRecord } from "@/lib/record-store";
 import { getDoctor } from "@/lib/doctors";
 import { threadStore } from "@/lib/thread-store";
-import { checkThreadOrigin, type OriginChainStatus } from "@/lib/thread-origin";
+import { originEligibility } from "@/lib/origin-eligibility";
 import { auditLog } from "@/lib/audit-log";
-
-const STATUS_LABELS = ["None", "Created", "Approved", "Revoked"] as const;
-
-// The origin must have a final decision: approved, revoked, or refused.
-// A record still awaiting approval cannot start a thread (see thread-origin.ts).
-async function originChainStatus(recordId: Hex): Promise<OriginChainStatus> {
-  try {
-    const record = await getRecord(recordId);
-    return STATUS_LABELS[record.status] ?? "unavailable";
-  } catch {
-    return "unavailable";
-  }
-}
 
 // POST /api/threads — the doctor books a follow-up from an existing record
 // (SPEC-v2 §3, Phase 1.5 part 2). Opening a thread shares NOTHING: it only
@@ -54,10 +40,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ threadId: existing.threadId, existing: true });
   }
 
-  const eligibility = checkThreadOrigin({
-    refused: Boolean(stored.refusedReason),
-    chainStatus: stored.refusedReason ? "None" : await originChainStatus(origin),
-  });
+  // The origin must have a final decision: approved, revoked, or refused.
+  // A record still awaiting approval cannot start a thread (see thread-origin.ts).
+  const eligibility = await originEligibility(origin, stored);
   if (!eligibility.ok) {
     return NextResponse.json({ error: eligibility.reason }, { status: 409 });
   }

@@ -1,25 +1,44 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DOCTORS } from "@/lib/doctors";
 import { SharePreview, type Disclosure } from "./share-preview";
 
 // Client-side glue for the demo flow:
-// 1. "Voice check-in" → real browser speech-to-text (Web Speech API) turns
-//    what you actually say into text. This is transcription only — no
-//    voice/emotion/health inference of any kind (see SPEC.md §3). Note:
-//    in Chrome this sends audio to Google's speech servers as part of how
-//    the browser implements the API; we never receive or store the raw
-//    audio ourselves, only the resulting text. Falls back to a fixed demo
-//    sentence if the browser doesn't support it or nothing was said.
-//    That text becomes the record's real content — its hash is what gets
-//    committed on-chain (see api/records/route.ts).
-// 2. "Release" → full-page navigation to /api/world/authorize?recordId=...
-//    (a real browser redirect — this is the "fresh human verification at
-//    the moment of release" step, so it must never be an XHR/fetch call).
-const LISTEN_DURATION_MS = 4000;
+// 1. Check-in text comes from one of two inputs that share one path:
+//    - "Start recording" → browser speech-to-text (Web Speech API). It runs
+//      until the person presses Stop (60 s cap) and shows the words live.
+//      Transcription only, no voice/emotion/health inference (SPEC.md §3).
+//      Chrome may send audio to Google's speech servers as part of how the
+//      browser implements the API; we only ever receive the resulting text.
+//    - Paste / type text: the same textarea, for demos and when speech is
+//      unavailable.
+//    Nothing is sent automatically. The person reviews the text, then presses
+//    "Send". Sending calls the same POST /api/records either way.
+// 2. "Confirm & continue" → full-page navigation to /api/world/authorize
+//    (a real browser redirect — this is the "fresh human verification at the
+//    moment of release" step, so it must never be an XHR/fetch call).
+const MAX_LISTEN_MS = 60_000;
+// Chrome can end a session on its own during silence. Restart unless the
+// person pressed Stop. Fatal errors stop the session and are shown.
+const NON_FATAL_SPEECH_ERRORS = ["no-speech", "aborted"];
 
 type Stage = "picking" | "idle" | "listening" | "preparing" | "ready" | "denied";
+
+// Turns an API failure into a sentence the person can act on. Nothing is sent
+// in any of these cases, so the text stays in the box for a retry.
+function describeSendError(status: number, error: string | undefined): string {
+  switch (error) {
+    case "encryption_failed":
+      return `The recipient's encryption key could not be read from ENS, so nothing was sent (HTTP ${status}, encryption_failed). Try again in a moment.`;
+    case "create_commitment_failed":
+      return `The commitment could not be written to Sepolia, so nothing was sent (HTTP ${status}, create_commitment_failed).`;
+    case "missing_record_id":
+      return `The server did not accept the request (HTTP ${status}).`;
+    default:
+      return `Could not prepare the record: ${error ?? "unknown error"} (HTTP ${status}). Nothing was sent.`;
+  }
+}
 
 export function ReleaseFlowClient({ initialDoctorId = null }: { initialDoctorId?: string | null }) {
   const [stage, setStage] = useState<Stage>(initialDoctorId ? "idle" : "picking");
@@ -27,119 +46,183 @@ export function ReleaseFlowClient({ initialDoctorId = null }: { initialDoctorId?
   const [recordId, setRecordId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [ciphertextPreview, setCiphertextPreview] = useState<string | null>(null);
-  const [transcript, setTranscript] = useState("");
-  const [finalContent, setFinalContent] = useState<string | null>(null);
+  // The one text box: live transcript while listening, editable text otherwise.
+  const [text, setText] = useState("");
+  const [speechNote, setSpeechNote] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [sentContent, setSentContent] = useState<string | null>(null);
   const [disclosure, setDisclosure] = useState<Disclosure | null>(null);
   const [denial, setDenial] = useState<{ reason: string; message: string } | null>(null);
 
+  // Speech session state. Refs, because the recognizer's callbacks outlive renders.
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const committedRef = useRef("");
+  const interimRef = useRef("");
+  const stopRequestedRef = useRef(false);
+  const finishedRef = useRef(true);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const doctor = DOCTORS.find((d) => d.id === doctorId);
 
-  const listenForSpeech = (): Promise<string> => {
-    const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
-    if (!Recognition) return Promise.resolve("");
-
-    return new Promise((resolve) => {
-      const recognition = new Recognition();
-      recognition.lang = "en-US";
-      recognition.interimResults = true;
-      recognition.continuous = true;
-
-      let latest = ""; // best-so-far transcript (final + interim combined)
-      let settled = false;
-      const finish = (text: string) => {
-        if (settled) return;
-        settled = true;
-        try {
-          recognition.abort(); // hard-stop — Chrome can leave `stop()` hanging
-        } catch {
-          // already stopped
-        }
-        resolve(text.trim());
-      };
-
-      recognition.onresult = (event) => {
-        let finalText = "";
-        let interim = "";
-        for (let i = 0; i < event.results.length; i++) {
-          const result = event.results[i];
-          if (result.isFinal) finalText += result[0].transcript + " ";
-          else interim += result[0].transcript;
-        }
-        latest = (finalText + interim).trim();
-        setTranscript(latest);
-      };
-      recognition.onerror = () => finish(latest);
-      recognition.onend = () => finish(latest);
-
+  // Stop any live session when the page is left.
+  useEffect(() => {
+    return () => {
+      stopRequestedRef.current = true;
+      if (timerRef.current) clearTimeout(timerRef.current);
       try {
-        recognition.start();
+        recognitionRef.current?.abort();
       } catch {
-        resolve("");
-        return;
+        // already stopped
       }
-      // Hard timeout: resolves with whatever was heard so far, no matter
-      // what state the recognition engine is in — never blocks the flow.
-      setTimeout(() => finish(latest), LISTEN_DURATION_MS);
-    });
+    };
+  }, []);
+
+  const finishListening = () => {
+    if (finishedRef.current) return;
+    finishedRef.current = true;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = null;
+    recognitionRef.current = null;
+    setText((committedRef.current + interimRef.current).trim());
+    setStage("idle");
   };
 
-  const startVoiceCheckIn = async () => {
-    if (!doctor) return;
-    setStatus(null);
-    setCiphertextPreview(null);
-    setTranscript("");
-    setFinalContent(null);
-    setDisclosure(null);
-    setDenial(null);
+  const stopListening = () => {
+    stopRequestedRef.current = true;
+    try {
+      recognitionRef.current?.stop();
+    } catch {
+      // already stopped
+    }
+    // Chrome can leave `stop()` hanging, so finish anyway after a short wait.
+    setTimeout(finishListening, 1500);
+  };
 
-    const fallbackContent =
-      "Voice check-in received (speech recognition unavailable — using demo text). " +
-      `The agent prepared this record for ${doctor.label} — content stays encrypted until a ` +
-      "fresh human approval releases it.";
-
-    setStage("listening");
-    const spoken = await listenForSpeech();
-    const content = spoken || fallbackContent;
-    setFinalContent(content);
-    if (!spoken) {
-      setStatus("Couldn't hear anything (or speech recognition isn't supported here) — using demo text instead.");
+  const startListening = () => {
+    const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
+    if (!Recognition) {
+      setSpeechNote("This browser does not support speech recognition. Paste or type the text instead.");
+      return;
     }
 
-    setStage("preparing");
+    setSpeechNote(null);
+    setSendError(null);
+    setStatus(null);
+    committedRef.current = "";
+    interimRef.current = "";
+    stopRequestedRef.current = false;
+    finishedRef.current = false;
+    setText("");
+
+    const recognition = new Recognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = true;
+    recognition.continuous = true;
+
+    recognition.onresult = (event) => {
+      let interim = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (result.isFinal) committedRef.current += result[0].transcript + " ";
+        else interim += result[0].transcript;
+      }
+      interimRef.current = interim;
+      setText((committedRef.current + interim).trim());
+    };
+
+    recognition.onerror = (event) => {
+      if (NON_FATAL_SPEECH_ERRORS.includes(event.error)) return;
+      setSpeechNote(`Speech recognition stopped: ${event.error}. The words heard so far are kept below.`);
+      stopRequestedRef.current = true;
+    };
+
+    recognition.onend = () => {
+      if (!stopRequestedRef.current) {
+        try {
+          recognition.start();
+          return;
+        } catch {
+          // could not restart; finish with what we have
+        }
+      }
+      finishListening();
+    };
+
+    recognitionRef.current = recognition;
+    setStage("listening");
     try {
-      const res = await fetch("/api/records", {
+      recognition.start();
+    } catch {
+      setSpeechNote("Could not start the microphone. Paste or type the text instead.");
+      finishListening();
+      return;
+    }
+    timerRef.current = setTimeout(() => {
+      setSpeechNote("Stopped at the 60-second limit. Review the text, then send.");
+      stopListening();
+    }, MAX_LISTEN_MS);
+  };
+
+  // The one path for both voice and pasted text. Sends only on an explicit press.
+  const send = async () => {
+    if (!doctor) return;
+    const content = text.trim();
+    if (!content) {
+      setSendError("There is nothing to send yet. Record, or paste some text, first.");
+      return;
+    }
+
+    setSendError(null);
+    setStatus(null);
+    setCiphertextPreview(null);
+    setDisclosure(null);
+    setDenial(null);
+    setSentContent(content);
+    setStage("preparing");
+
+    let res: Response;
+    try {
+      res = await fetch("/api/records", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ doctorId: doctor.id, content }),
       });
-      const body = await res.json();
-      if (body.disclosure) setDisclosure(body.disclosure);
-      // v2: a policy refusal is a normal, explained outcome — not an error.
-      if (res.status === 403 && body.error === "policy_denied") {
-        setRecordId(body.recordId);
-        setDenial({ reason: body.reason, message: body.message });
-        setStatus(null);
-        setStage("denied");
-        return;
-      }
-      if (!res.ok) throw new Error(body.error ?? "failed");
-      setRecordId(body.recordId);
-      if (body.encryptedContent) {
-        setCiphertextPreview(body.encryptedContent.ciphertext);
-        setStatus(
-          (prev) =>
-            (prev ? prev + " " : "") +
-            `Encrypted to ${doctor.label}'s public key (looked up from its ENS text record) — nothing is shared yet, and only that key's owner can ever decrypt it.`
-        );
-      } else {
-        setStatus("Prepared. Nothing is shared yet — this only registered a commitment.");
-      }
-      setStage("ready");
     } catch {
-      setStatus("Could not prepare a record. Check the server logs.");
+      setSendError("Could not reach the server. Nothing was sent. Your text is still here, so you can send it again.");
       setStage("idle");
+      return;
     }
+
+    const body = await res.json().catch(() => ({}));
+    if (body.disclosure) setDisclosure(body.disclosure);
+
+    // v2: a policy refusal is a normal, explained outcome — not an error.
+    if (res.status === 403 && body.error === "policy_denied") {
+      setRecordId(body.recordId);
+      setDenial({ reason: body.reason, message: body.message });
+      setStage("denied");
+      return;
+    }
+
+    if (!res.ok) {
+      setSendError(describeSendError(res.status, body.error));
+      setStage("idle");
+      return;
+    }
+
+    setRecordId(body.recordId);
+    if (body.encryptedContent) {
+      setCiphertextPreview(body.encryptedContent.ciphertext);
+      setStatus(
+        `Encrypted to ${doctor.label}'s public key (looked up from its ENS text record) — nothing is shared yet, and only that key's owner can ever decrypt it.`
+      );
+    } else {
+      setStatus("Prepared. Nothing is shared yet — this only registered a commitment.");
+    }
+    setStage("ready");
   };
+
+  const listening = stage === "listening";
 
   return (
     <div className="flex flex-col items-center gap-4 text-center">
@@ -179,21 +262,57 @@ export function ReleaseFlowClient({ initialDoctorId = null }: { initialDoctorId?
         </p>
       )}
 
-      {stage === "idle" && (
-        <button
-          onClick={startVoiceCheckIn}
-          className="w-full rounded-full bg-neutral-100 px-8 py-3.5 text-sm font-medium text-neutral-950 transition hover:bg-white"
-        >
-          🎙 Start voice check-in
-        </button>
-      )}
+      {(stage === "idle" || stage === "listening") && (
+        <div className="flex w-full flex-col gap-3 rounded-2xl border border-neutral-800 bg-neutral-900 px-5 py-5 text-left">
+          <label className="text-xs text-neutral-500" htmlFor="check-in-text">
+            {listening ? "Listening… (live transcript)" : "Check-in text — record it, or paste or type it"}
+          </label>
+          <textarea
+            id="check-in-text"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            readOnly={listening}
+            rows={4}
+            placeholder="e.g. My name is Taro. I have a question about my medication."
+            className="w-full rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm text-neutral-200 placeholder:text-neutral-600"
+          />
 
-      {stage === "listening" && (
-        <div className="flex w-full flex-col items-center gap-2 rounded-2xl border border-neutral-800 bg-neutral-900 px-8 py-6">
-          <span className="h-3 w-3 animate-pulse rounded-full bg-red-500" />
-          <p className="text-sm text-neutral-300">Listening… speak now</p>
-          {transcript && (
-            <p className="mt-2 max-w-xs text-xs italic text-neutral-500">&ldquo;{transcript}&rdquo;</p>
+          {listening ? (
+            <button
+              onClick={stopListening}
+              className="w-full rounded-full bg-red-500 px-6 py-3 text-sm font-medium text-neutral-950 transition hover:bg-red-400"
+            >
+              <span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-neutral-950" />
+              Stop recording
+            </button>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={startListening}
+                className="flex-1 rounded-full border border-neutral-700 bg-neutral-100 px-5 py-3 text-sm font-medium text-neutral-950 transition hover:bg-white"
+              >
+                🎙 Start recording
+              </button>
+              <button
+                onClick={send}
+                disabled={!text.trim()}
+                className="flex-1 rounded-full bg-emerald-500 px-5 py-3 text-sm font-medium text-neutral-950 transition hover:bg-emerald-400 disabled:opacity-40"
+              >
+                Send
+              </button>
+            </div>
+          )}
+
+          {speechNote && <p className="text-xs text-amber-300">{speechNote}</p>}
+          {sendError && (
+            <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+              {sendError}
+            </div>
+          )}
+          {!listening && (
+            <p className="text-[11px] text-neutral-600">
+              Nothing is sent until you press Send. Pressing it runs the same checks and encryption for typed and spoken text.
+            </p>
           )}
         </div>
       )}
@@ -204,19 +323,17 @@ export function ReleaseFlowClient({ initialDoctorId = null }: { initialDoctorId?
 
       {stage === "ready" && recordId && doctor && (
         <div className="w-full rounded-2xl border border-neutral-800 bg-neutral-900 px-6 py-5 text-left">
-          <p className="mb-3 text-xs uppercase tracking-wide text-neutral-500">
-            Voice check-in — report
-          </p>
-          {finalContent && (
+          <p className="mb-3 text-xs uppercase tracking-wide text-neutral-500">Check-in — report</p>
+          {sentContent && (
             <p className="mb-3 rounded-lg bg-neutral-950 px-3 py-2 text-xs italic text-neutral-500">
-              You said: &ldquo;{finalContent}&rdquo;{" "}
+              You said: &ldquo;{sentContent}&rdquo;{" "}
               <span className="not-italic text-neutral-600">(stays with you — not stored)</span>
             </p>
           )}
           <dl className="space-y-1.5 text-sm">
             <div className="flex justify-between gap-4">
               <dt className="text-neutral-500">Source</dt>
-              <dd className="text-neutral-200">Voice check-in (live speech-to-text)</dd>
+              <dd className="text-neutral-200">Voice or pasted text</dd>
             </div>
             <div className="flex justify-between gap-4">
               <dt className="text-neutral-500">Recipient</dt>
