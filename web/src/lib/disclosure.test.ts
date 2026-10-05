@@ -42,4 +42,41 @@ describe("redact (minimal disclosure)", () => {
     const r = redact("taro@example.jp 090-1234-5678");
     expect(JSON.stringify(r)).not.toMatch(/taro@example\.jp|090-1234-5678/);
   });
+
+  // Regression: the ID rule used to eat "0000-0000 1990" out of the phone number
+  // and the birth year, leaving "090-" and "1月1日生" visible on screen.
+  it("removes a phone, a birth date and an insurance number from one Japanese sentence", () => {
+    const input = "テスト太郎 090-0000-0000 1990年1月1日生 東京都千代田区1-1-1 保険証番号12345678";
+    const r = redact(input);
+
+    expect(r.redactedText).not.toMatch(/090|0000|1990|12345678/);
+    expect(r.redactedText).toBe(
+      "テスト太郎 [PHONE_1] [DATE_1]生 東京都千代田区1-1-1 保険証番号[ID_NUMBER_1]"
+    );
+    expect(r.summary).toMatchObject({ PHONE: 1, DATE: 1, ID_NUMBER: 1 });
+  });
+
+  it("removes Japanese landline and mobile numbers with hyphens", () => {
+    const r = redact("03-0000-0000 と 090-0000-0000 と 0120-12-3456");
+    expect(r.summary.PHONE).toBe(3);
+    expect(r.redactedText).not.toMatch(/0000|0120|-12-/);
+  });
+
+  it("removes Japanese dates in the Western and era (和暦) forms", () => {
+    const r = redact("1990年1月1日生まれ、平成5年3月4日に入院");
+    expect(r.summary.DATE).toBe(2);
+    expect(r.redactedText).not.toMatch(/1990|平成5/);
+  });
+
+  it("replaces only the number after a My Number or insurance label, and keeps the label", () => {
+    const r = redact("マイナンバー: 1234-5678-9012 / 個人番号は123456789012");
+    expect(r.redactedText).toBe("マイナンバー: [ID_NUMBER_1] / 個人番号は[ID_NUMBER_2]");
+    expect(r.summary.ID_NUMBER).toBe(2);
+  });
+
+  it("numbers placeholders per category across rules, so different values never share one", () => {
+    const r = redact("保険証番号12345678 and also 1234 5678 9012");
+    expect(r.redactedText).toBe("保険証番号[ID_NUMBER_1] and also [ID_NUMBER_2]");
+    expect(r.summary.ID_NUMBER).toBe(2);
+  });
 });

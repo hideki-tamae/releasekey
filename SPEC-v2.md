@@ -179,7 +179,28 @@ Feedback that drives this: [`docs/v2/FEEDBACK.md`](./docs/v2/FEEDBACK.md). Order
 2. Speak a check-in that includes a phone number and a birth date →
    the screen shows them **replaced**, the risk score, and the policy.
 3. Approve with World ID → released to Dr. Bob only; decrypt works.
-4. **Refusal moment:** revoke → access is refused live; a second record with too
-   many identifiers is **denied before touching the chain**.
+4. **Refusal moment:** revoke → access is refused live; a second record that says
+   *"私は45歳の看護師で、千代田区の病院に勤めています。"* (English: *"I am 45 years old and a
+   nurse in Chiyoda, Tokyo."*) is **denied before touching the chain** (re-identification
+   score 67 > 40, rule 5). This sentence is chosen because the outcome is deterministic.
+   Identifiers alone (a phone number, a birth date) do not trigger this refusal; see §9.
 5. Show the audit trail verifying ✓ — then show it failing if one entry is edited
    (unit test output).
+
+## 9. Known limitations and open issues (Phase 1)
+
+### Known limitations
+- **Names and street addresses are not redacted.** The disclosure rules cover emails, URLs,
+  phone numbers, 12-digit ID numbers, numbers after an ID label (保険証番号, マイナンバー,
+  個人番号), dates (Western, 和暦) and postal codes. A person's name (e.g. テスト太郎) and a
+  street address (e.g. 1-1-1) pass through unchanged. Neither is in scope for Phase 1; the
+  re-identification check and the human approval are the only guards for them.
+- Redaction is rule-based and not exhaustive. A number that matches no rule is shared as is.
+
+### Open issues (future work)
+- **Refusal on the number of identifiers left after redaction.** The decision router refuses
+  only when the re-identification score is over the limit (rule 5). The score counts
+  quasi-identifiers (age, place, occupation, family, rare attributes, residual numbers). It does
+  not count direct identifiers that survive redaction, so a text that is mostly identifiers
+  but has no quasi-identifier can still pass. A rule that refuses when N or more identifier-like
+  values remain would change the decision rules and needs a human decision first. Not in this phase.
