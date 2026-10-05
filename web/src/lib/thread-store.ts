@@ -12,6 +12,7 @@
 // The threadId is a bearer capability, like recordId (README, Known limitations).
 
 import type { Hex } from "viem";
+import { globalSingleton } from "./global-singleton";
 
 export type ThreadEvent =
   | { kind: "opened"; at: number }
@@ -112,4 +113,5 @@ function copy(thread: Thread): Thread {
 }
 
 // One store per server process, used by the API routes and the thread page.
-export const threadStore = new ThreadStore();
+// Shared across module copies (see global-singleton.ts).
+export const threadStore = globalSingleton("__releasekeyThreadStore", () => new ThreadStore());

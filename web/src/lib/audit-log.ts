@@ -12,6 +12,7 @@
 // stores. Phase 2 persists it and anchors the head hash on-chain.
 
 import { keccak256, toBytes, type Hex } from "viem";
+import { globalSingleton } from "./global-singleton";
 
 export type AuditEventType =
   | "prepared"
@@ -121,4 +122,5 @@ export function verifyChain(entries: AuditEntry[]): { ok: true } | { ok: false; 
 }
 
 // One log per server process, used by the API routes.
-export const auditLog = new AuditLog();
+// Shared across module copies (see global-singleton.ts).
+export const auditLog = globalSingleton("__releasekeyAuditLog", () => new AuditLog());

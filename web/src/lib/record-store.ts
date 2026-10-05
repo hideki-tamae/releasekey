@@ -9,6 +9,7 @@
 // boundary table, which was never otherwise implemented in this demo.
 import type { Hex } from "viem";
 import type { EncryptedPayload } from "./ens-crypto";
+import { globalSingleton } from "./global-singleton";
 
 export type StoredRecord = {
   recipientEns: string;
@@ -24,7 +25,8 @@ export type StoredRecord = {
   createdAt: number;
 };
 
-const records = new Map<Hex, StoredRecord>();
+// Shared across module copies (see global-singleton.ts).
+const records = globalSingleton("__releasekeyRecords", () => new Map<Hex, StoredRecord>());
 
 export function storeRecord(recordId: Hex, entry: Omit<StoredRecord, "createdAt">): void {
   records.set(recordId, { ...entry, createdAt: Date.now() });
