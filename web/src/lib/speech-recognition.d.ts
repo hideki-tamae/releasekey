@@ -1,6 +1,8 @@
 // Minimal ambient types for the Web Speech API — not in TypeScript's DOM
 // lib yet. Only the surface this app actually uses.
 interface SpeechRecognitionResultEvent extends Event {
+  /** Index of the first result that changed since the last event. */
+  resultIndex: number;
   results: {
     [index: number]: { [index: number]: { transcript: string }; isFinal: boolean };
     length: number;

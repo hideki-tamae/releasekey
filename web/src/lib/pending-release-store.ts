@@ -11,6 +11,7 @@
 // construct an isolated store instead of sharing state across test cases.
 
 import type { Hex } from "viem";
+import { globalSingleton } from "./global-singleton";
 
 export type PendingRelease = {
   recordId: Hex;
@@ -43,4 +44,8 @@ export class PendingReleaseStore {
 }
 
 // One store per server process, used by the actual API routes.
-export const pendingReleaseStore = new PendingReleaseStore();
+// Shared across module copies (see global-singleton.ts).
+export const pendingReleaseStore = globalSingleton(
+  "__releasekeyPendingReleaseStore",
+  () => new PendingReleaseStore()
+);

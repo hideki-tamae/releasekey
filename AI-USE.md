@@ -139,3 +139,22 @@ on the `v2` branch, starting from the frozen v1 branch `v1-ethglobal-tokyo-2026`
   (screenshots in `docs/v2/img`). The approval path still needs a real
   World ID + Sepolia run by a human before it is claimed as live.
 - The deployed contract is unchanged.
+
+### Phase 1.5 (doctor discovery) — human decisions vs. AI work
+
+**Decided by a human (Hideki Tamae), confirmed before implementation:**
+- Sharing always needs a new human approval. A follow-up thread never auto-shares.
+- A follow-up is a new record. The contract is unchanged.
+- Order of work: doctor discovery first, follow-up second (mentor Leo's advice).
+- Location is limited to prefecture and city. No precise location.
+- Ratings and review counts are synthetic demo values.
+- The doctor's reply in a thread is a fixed menu only, no free text.
+
+**Done by AI (Claude):** the doctor-discovery code (`doctor-search.ts`, `/doctors`,
+the `?doctorId=` hand-off), its tests, the SPEC-v2 Phase 1.5 text, and `docs/v2/FEEDBACK.md`
+from the feedback quoted by Hideki. Nothing in the contract or in `src/` or `test/` was changed.
+
+**Phase 1.5 part 2 (follow-up threads), done by AI (Claude):** `prepare-release.ts` (the
+pipeline extracted from `POST /api/records`, behaviour unchanged), `thread-store.ts`, the
+`/api/threads` routes, `/thread/:id`, their tests (80 web tests in total). The thread is a
+grouping only: approval stays per record, and the doctor's replies are a fixed menu.

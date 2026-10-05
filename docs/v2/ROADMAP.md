@@ -54,3 +54,7 @@ Person ─► consent ─► access right ─► minimal disclosure ─► proof
 - [ ] Show the **refusal** live (policy denial + revoke → access refused)
 - [ ] Pick at most 2 sponsor tracks; map each requirement to code 1:1 in README
 - [ ] Showcase text with numbers and failure cases, 2–4 min video with own voice
+
+## 要確認（open questions）
+
+- **Send の最初のクリックが反応しないことがある。** 2026-10-05 のブラウザ確認で、/release の Send を1回押しても画面が変わらず、2回目で送信されました。原因は未確定です。送信処理（`release-flow-client.tsx`）のイベントか、クリック位置か、Chrome 側の要因かを、次に確認してください。

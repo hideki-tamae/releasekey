@@ -2,10 +2,13 @@ import type { Hex } from "viem";
 import { RevokeButton } from "./revoke-button";
 import { AccessReportButton } from "./access-report-button";
 import { ViewStoredButton } from "./view-stored-button";
+import { BookFollowupButton } from "./book-followup-button";
 import { AuditTrail } from "./audit-trail";
 import { DENY_REASON_TEXT, type DenyReason } from "@/lib/release-decision";
 import { getStoredRecord } from "@/lib/record-store";
 import { getDoctor } from "@/lib/doctors";
+import { threadStore } from "@/lib/thread-store";
+import { originEligibility } from "@/lib/origin-eligibility";
 
 type SearchParams = Promise<{ status?: string; reason?: string; recordId?: string }>;
 
@@ -21,6 +24,16 @@ export default async function ReleaseResultPage({
   const approved = status === "approved";
   const stored = recordId ? getStoredRecord(recordId as Hex) : undefined;
   const doctor = stored ? getDoctor(stored.doctorId) : undefined;
+
+  // A follow-up thread can start from any record with a final decision
+  // (approved, revoked or refused), decided by the same rule as POST /api/threads.
+  // A record that already has a thread links to it instead.
+  const isFirstRecord = Boolean(recordId && stored && !stored.threadId);
+  const existingThread = isFirstRecord ? threadStore.findByOrigin(recordId as Hex) : undefined;
+  const canBook =
+    isFirstRecord && !existingThread && stored
+      ? (await originEligibility(recordId as Hex, stored)).ok
+      : false;
 
   return (
     <main className="flex min-h-screen flex-1 flex-col items-center justify-center px-6">
@@ -70,7 +83,24 @@ export default async function ReleaseResultPage({
           <p className="mt-4 font-mono text-xs break-all text-neutral-600">{recordId}</p>
         )}
 
-        {recordId && <ViewStoredButton recordId={recordId} />}
+        {stored?.threadId && (
+          <a
+            href={`/thread/${stored.threadId}`}
+            className="mt-4 inline-block text-sm text-neutral-300 underline underline-offset-4 hover:text-white"
+          >
+            This is a follow-up in a thread → back to the thread
+          </a>
+        )}
+        {existingThread && (
+          <a
+            href={`/thread/${existingThread.threadId}`}
+            className="mt-4 inline-block text-sm text-neutral-300 underline underline-offset-4 hover:text-white"
+          >
+            Open the follow-up thread →
+          </a>
+        )}
+        {canBook && recordId && <BookFollowupButton recordId={recordId} />}
+        {recordId && stored?.encryptedContent && <ViewStoredButton recordId={recordId} />}
         {approved && recordId && <AccessReportButton recordId={recordId} />}
         {approved && recordId && <RevokeButton recordId={recordId} />}
         {recordId && <AuditTrail recordId={recordId} />}

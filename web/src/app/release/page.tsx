@@ -1,6 +1,14 @@
 import { ReleaseFlowClient } from "./release-flow-client";
+import { DOCTORS } from "@/lib/doctors";
 
-export default function ReleasePage() {
+// Phase 1.5: /doctors links here with ?doctorId=. Only a doctor with a
+// published key is accepted; anything else falls back to the normal picker.
+type SearchParams = Promise<{ doctorId?: string }>;
+
+export default async function ReleasePage({ searchParams }: { searchParams: SearchParams }) {
+  const { doctorId } = await searchParams;
+  const initialDoctorId = DOCTORS.find((d) => d.id === doctorId)?.id ?? null;
+
   return (
     <main className="flex min-h-screen flex-1 flex-col items-center justify-center px-6">
       <div className="w-full max-w-sm">
@@ -14,7 +22,7 @@ export default function ReleasePage() {
             World ID, right now — can release it.
           </p>
         </div>
-        <ReleaseFlowClient />
+        <ReleaseFlowClient initialDoctorId={initialDoctorId} />
       </div>
     </main>
   );

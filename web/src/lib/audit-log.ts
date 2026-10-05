@@ -12,6 +12,7 @@
 // stores. Phase 2 persists it and anchors the head hash on-chain.
 
 import { keccak256, toBytes, type Hex } from "viem";
+import { globalSingleton } from "./global-singleton";
 
 export type AuditEventType =
   | "prepared"
@@ -21,7 +22,11 @@ export type AuditEventType =
   | "approved"
   | "access_granted"
   | "access_refused"
-  | "revoked";
+  | "revoked"
+  // Phase 1.5 part 2: thread events. Attached to a record and marked with
+  // details.threadId, so the thread's history can be filtered out of the log.
+  | "thread_opened"
+  | "thread_reply";
 
 export type AuditDetails = Record<string, string | number | boolean>;
 
@@ -92,6 +97,11 @@ export class AuditLog {
     return recordId ? all.filter((e) => e.recordId === recordId) : all;
   }
 
+  /** All entries (copies) that carry this threadId in their details. */
+  entriesForThread(threadId: string): AuditEntry[] {
+    return this.entries().filter((e) => e.details?.threadId === threadId);
+  }
+
   head(): Hex {
     return this.log.length ? this.log[this.log.length - 1].hash : GENESIS_HASH;
   }
@@ -112,4 +122,5 @@ export function verifyChain(entries: AuditEntry[]): { ok: true } | { ok: false; 
 }
 
 // One log per server process, used by the API routes.
-export const auditLog = new AuditLog();
+// Shared across module copies (see global-singleton.ts).
+export const auditLog = globalSingleton("__releasekeyAuditLog", () => new AuditLog());

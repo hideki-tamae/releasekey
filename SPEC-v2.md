@@ -56,6 +56,36 @@ Evidence (public Showcase + closing ceremony, 2026-09-27; full analysis in
    what categories were removed, the risk score, and the policy applied.
    The result screen shows the audit trail and its verification status.
 
+### Phase 1.5 — doctor discovery (part 1, implemented) · follow-up thread (part 2, implemented)
+Feedback that drives this: [`docs/v2/FEEDBACK.md`](./docs/v2/FEEDBACK.md). Order: doctor first, follow-up second.
+- **Doctor search** (`/doctors`, `web/src/lib/doctor-search.ts`): filter by prefecture, city,
+  minimum rating (1.0–5.0) and minimum review count; sorted by rating, then reviews.
+  Location is coarse (prefecture / city) — no coordinates are used or stored. The query is
+  not logged. Invalid query values are ignored, never widened.
+- **Bookable only with a key:** doctors without a published encryption key are listed as
+  "sharing not possible" and cannot be chosen. `getDoctor()` resolves only keyed doctors, so
+  the router denies any other id as `unknown_recipient`. The decision rules are unchanged.
+- **Synthetic demo data:** all doctors, areas, ratings and review counts are fictional.
+  The UI labels them as demo values. They are not real reviews.
+- **Follow-up thread (part 2, implemented):** the doctor books a thread from a record
+  (`POST /api/threads`). Booking shares nothing. A follow-up is a new record
+  (`POST /api/threads/:id/records`) that goes through the same prepare pipeline as a first
+  record, with `threadId` on every audit entry. It needs its own fresh World ID approval.
+  A refused follow-up is logged in the thread, and the thread stays open. The doctor replies
+  from a fixed menu of codes only (`POST /api/threads/:id/replies`). A thread carries no
+  approval, no TTL and no auto-release.
+  - **Origin rule:** a thread can start only from a decided record: approved, revoked, or
+    refused (`web/src/lib/thread-origin.ts`). A record still awaiting approval (`Created`) cannot.
+    A refusal is kept with its reason code and no content.
+  - **Known limitations (Phase 1.5 part 2):**
+    - There is no API to close a thread. `ThreadStore.close()` exists in code, but no route calls it.
+    - The doctor is not authenticated. Anyone holding a `recordId` can book a thread, and anyone
+      holding a `threadId` can reply or prepare a follow-up. Both are bearer capabilities
+      (same as `recordId`, see README Known limitations).
+    - Threads and refusals live in one process's memory and are lost on restart.
+    - A follow-up's sequence number is assigned when its record is attached, so a refused
+      follow-up takes no number.
+
 ### Phase 2 — designed, not implemented (see `docs/v2/ROADMAP.md`)
 - **MynaWallet (JPKI)** professional attestation for recipients (doctors,
   care staff): a recipient must prove a real, publicly-certified identity
@@ -149,7 +179,28 @@ Evidence (public Showcase + closing ceremony, 2026-09-27; full analysis in
 2. Speak a check-in that includes a phone number and a birth date →
    the screen shows them **replaced**, the risk score, and the policy.
 3. Approve with World ID → released to Dr. Bob only; decrypt works.
-4. **Refusal moment:** revoke → access is refused live; a second record with too
-   many identifiers is **denied before touching the chain**.
+4. **Refusal moment:** revoke → access is refused live; a second record that says
+   *"私は45歳の看護師で、千代田区の病院に勤めています。"* (English: *"I am 45 years old and a
+   nurse in Chiyoda, Tokyo."*) is **denied before touching the chain** (re-identification
+   score 67 > 40, rule 5). This sentence is chosen because the outcome is deterministic.
+   Identifiers alone (a phone number, a birth date) do not trigger this refusal; see §9.
 5. Show the audit trail verifying ✓ — then show it failing if one entry is edited
    (unit test output).
+
+## 9. Known limitations and open issues (Phase 1)
+
+### Known limitations
+- **Names and street addresses are not redacted.** The disclosure rules cover emails, URLs,
+  phone numbers, 12-digit ID numbers, numbers after an ID label (保険証番号, マイナンバー,
+  個人番号), dates (Western, 和暦) and postal codes. A person's name (e.g. テスト太郎) and a
+  street address (e.g. 1-1-1) pass through unchanged. Neither is in scope for Phase 1; the
+  re-identification check and the human approval are the only guards for them.
+- Redaction is rule-based and not exhaustive. A number that matches no rule is shared as is.
+
+### Open issues (future work)
+- **Refusal on the number of identifiers left after redaction.** The decision router refuses
+  only when the re-identification score is over the limit (rule 5). The score counts
+  quasi-identifiers (age, place, occupation, family, rare attributes, residual numbers). It does
+  not count direct identifiers that survive redaction, so a text that is mostly identifiers
+  but has no quasi-identifier can still pass. A rule that refuses when N or more identifier-like
+  values remain would change the decision rules and needs a human decision first. Not in this phase.

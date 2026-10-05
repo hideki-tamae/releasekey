@@ -33,7 +33,7 @@ export async function GET(
   }
 
   const stored = getStoredRecord(recordId as Hex);
-  if (!stored) {
+  if (!stored?.encryptedContent) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
